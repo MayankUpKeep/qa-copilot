@@ -1,0 +1,153 @@
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+
+export async function POST(req) {
+  try {
+    const { story, images = [] } = await req.json();
+
+    let imageSection = "";
+    if (images && images.length > 0) {
+      imageSection = `\n\nThe following images are attached to the ticket and may be relevant for test planning.\nFor each image, consider if it impacts the test plan:\n${images.map((img, i) => `Image ${i+1}: [${img.name || "image"}] (type: ${img.type})`).join("\n")}`;
+    }
+
+    const systemInstruction = `
+You are a senior QA engineer creating executable, ticket-focused test plans.
+
+OBJECTIVE:
+- Generate PRACTICAL, executable test plans (not documentation).
+- Every test plan element MUST trace back to explicit ticket content or images.
+- NO invented scenarios, assumptions, or features not mentioned.
+
+IMAGES ARE PRIMARY REFERENCE:
+- Analyze attached images to understand exact feature behavior, UI state, and requirements.
+- Images clarify ambiguous ticket descriptions.
+- Use images to validate test scenarios match intended design.
+
+TESTING CONSTRAINTS:
+- Testing is done in a non-production environment only.
+- No database access, backend logs, or server consoles.
+- Only UI testing and API validation via browser network tab are allowed.
+
+COVERAGE RULES:
+- Convert backend validations into UI observable behavior.
+- Replace DB verification with UI state validation.
+- Replace log verification with API response verification.
+- Include functional testing and UI validation ALWAYS.
+- Include API testing ONLY if ticket mentions APIs/services/endpoints/tokens.
+- Include permission checks ONLY if ticket mentions role-based behavior.
+- EXCLUDE: security, infrastructure, load, deployment, performance testing, monitoring, analytics, data warehouse, migrations, audit systems (unless explicitly in ticket).
+- Avoid QA jargon ("test strategy", "test methodology", "stakeholder alignment", etc).
+
+QUALITY STANDARDS:
+- Each test plan element must reference ticket content (quote or paraphrase).
+- All sections must be focused and concise.
+- Output must be directly pasteable into Jira fields.
+`;
+
+const formattingRule = `
+FORMATTING RULES:
+- Use bullet points for all sections.
+- One short, actionable line per bullet.
+- No paragraphs, introductions, or summaries.
+- No filler or generic statements.
+- Output must be directly pasteable into Jira fields.
+- Each item should reference ticket content where applicable.
+`;
+
+const prompt = `
+Analyze the Jira ticket and attached images ONLY. Produce a focused, executable test plan.
+
+TICKET CONTENT:
+${story}
+${imageSection}
+
+CRITICAL REQUIREMENTS:
+1. Analyze ticket content and images carefully.
+2. Identify ONLY features, behaviors, and requirements EXPLICITLY mentioned.
+3. Do NOT invent, assume, or speculate beyond ticket scope.
+4. Each test plan section must reference ticket content (quote or paraphrase the source).
+5. Use images to validate test understanding and accuracy.
+6. Output ONLY the test plan sections (no explanations, summaries, or ticket repetition).
+
+SECTION DEFINITIONS:
+
+TP Feature Dependencies & Risks:
+- List cross-team impacts, affected features, workflow changes, compatibility issues, and behavior differences as EXPLICITLY mentioned in ticket or shown in images.
+- Do NOT assume risks. Only document identified or evident risks.
+
+TP Test Execution Dependencies & Risks:
+- List required roles, permissions, data setup, external services, testability concerns, or blockers EXPLICITLY mentioned or implied by images.
+- Avoid speculating about missing prerequisites.
+
+TP Technical Requirements for Testing:
+- List specific environments, feature flags, configuration changes, integrations, or test data sources mentioned in ticket or visible in images.
+- Only include if ticket explicitly references these.
+
+TP Assumptions:
+- List ONLY assumptions that are directly implied by the ticket or images.
+- Examples: "Assume feature is available in Staging", "Assume admin role has access".
+- Do NOT add invented assumptions.
+
+TP Out of Scope:
+- List ONLY items explicitly excluded in the ticket (e.g., "Performance testing out of scope").
+- Do NOT assume items are out of scope unless ticket explicitly states it.
+
+TP Testing Scope:
+- Map EXACTLY to features/requirements mentioned in ticket.
+- Use bullet points for each feature or requirement that will be tested.
+- Reference specific ticket points.
+
+TP Testing Approach:
+- List testing method (exploratory, manual, automation) based on ticket requirements.
+- Specify who performs testing and any relevant QA workflow considerations mentioned.
+
+Test Scenarios:
+- Generate as many scenarios as needed to cover ALL explicit ticket requirements.
+- NEVER use fixed count.
+- Each scenario must trace back to a specific ticket requirement or image detail.
+- Format: Scenario: [specific user action/condition based on ticket] → Expected Result: [observable system behavior]
+- Focus on high-risk, critical paths, and requirement coverage.
+- Write deterministically, avoid "verify it works".
+- Expected results must be observable (UI state, API response, etc).
+
+Output EXACTLY in this structure:
+
+TP Feature Dependencies & Risks:
+
+TP Test Execution Dependencies & Risks:
+
+TP Technical Requirements for Testing:
+
+TP Assumptions:
+
+TP Out of Scope:
+
+TP Testing Scope:
+
+TP Testing Approach:
+
+Test Scenarios:
+- Scenario: [action/condition]
+  Expected Result: [observable outcome]
+`;
+
+    const response = await client.chat.completions.create({
+      model: "gpt-4.1-mini",
+      max_tokens: 2000,
+      messages: [
+        { role: "system", content: systemInstruction + formattingRule },
+        { role: "user", content: prompt }
+      ]
+    });
+
+    return Response.json({ output: response.choices[0].message.content });
+
+  } catch (err) {
+    console.error(err);
+    return Response.json({ output: "Error generating test plan." });
+  }
+}
