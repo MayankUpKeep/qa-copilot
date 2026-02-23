@@ -10,7 +10,7 @@ export async function POST(req) {
   try {
     const formData = await req.formData();
     const images = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 6; i++) {
       const file = formData.get(`image${i}`);
       if (file) {
         const arrayBuffer = await file.arrayBuffer();

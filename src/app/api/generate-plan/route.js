@@ -1,8 +1,4 @@
-import OpenAI from "openai";
-
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { anthropic, CLAUDE_MODEL, getTextFromResponse } from "@/lib/anthropic";
 
 
 export async function POST(req) {
@@ -42,10 +38,26 @@ COVERAGE RULES:
 - EXCLUDE: security, infrastructure, load, deployment, performance testing, monitoring, analytics, data warehouse, migrations, audit systems (unless explicitly in ticket).
 - Avoid QA jargon ("test strategy", "test methodology", "stakeholder alignment", etc).
 
+RACE CONDITION & CONCURRENCY AWARENESS:
+- If the ticket involves any of the following, you MUST include race condition scenarios:
+  * Concurrent user actions (multiple users editing the same record)
+  * Rapid repeated submissions (double-click, multiple form submits)
+  * Status/state transitions that could be triggered simultaneously
+  * Bulk operations or batch processing
+  * Real-time updates, notifications, or live data
+  * Queues, background jobs, or async workflows visible in UI
+- For each race condition scenario, describe: the conflicting actions, the timing, and the observable expected behavior.
+- If the ticket does NOT involve any concurrency-sensitive behavior, do NOT force race condition scenarios.
+
 QUALITY STANDARDS:
 - Each test plan element must reference ticket content (quote or paraphrase).
 - All sections must be focused and concise.
 - Output must be directly pasteable into Jira fields.
+
+EDGE CASE HANDLING:
+- If the ticket content is very short (under 50 words) or vague, produce a minimal test plan and add at the top: "⚠ Ticket lacks detail — test plan is limited. Request clarification from the team before testing."
+- If the ticket is purely cosmetic (label, color, text change), limit to 3-5 scenarios max and skip sections that don't apply (e.g., skip Race Conditions, skip TP Technical Requirements).
+- If no images are attached and the ticket references UI behavior, note: "No images provided — scenarios based on text description only. Visual verification recommended."
 `;
 
 const formattingRule = `
@@ -109,10 +121,18 @@ Test Scenarios:
 - Generate as many scenarios as needed to cover ALL explicit ticket requirements.
 - NEVER use fixed count.
 - Each scenario must trace back to a specific ticket requirement or image detail.
-- Format: Scenario: [specific user action/condition based on ticket] → Expected Result: [observable system behavior]
 - Focus on high-risk, critical paths, and requirement coverage.
 - Write deterministically, avoid "verify it works".
 - Expected results must be observable (UI state, API response, etc).
+- If the ticket involves concurrency-sensitive behavior, include race condition scenarios.
+
+SCENARIO CLASSIFICATION TABLE:
+After listing all test scenarios, you MUST produce a summary table classifying each scenario.
+
+Rules for classification:
+- Manual: Scenarios requiring visual verification, subjective judgment, exploratory paths, or complex multi-step UI workflows.
+- Automatable: Scenarios with deterministic inputs/outputs, repeatable steps, API validations, or data-driven checks that are good candidates for Playwright/Cypress/API automation.
+- Mark scenarios that involve race conditions or timing as "Manual" unless they can be reliably scripted.
 
 Output EXACTLY in this structure:
 
@@ -131,20 +151,27 @@ TP Testing Scope:
 TP Testing Approach:
 
 Test Scenarios:
-- Scenario: [action/condition]
-  Expected Result: [observable outcome]
+
+| # | Scenario | Expected Result | Type |
+|---|----------|-----------------|------|
+| 1 | [specific user action/condition] | [observable outcome] | Manual / Automatable |
+| 2 | ... | ... | ... |
+
+Race Condition Scenarios (if applicable):
+
+| # | Conflicting Actions | Timing | Expected Behavior | Type |
+|---|---------------------|--------|-------------------|------|
+| 1 | [action A vs action B] | [simultaneous / rapid succession] | [which should win, error shown, etc.] | Manual / Automatable |
 `;
 
-    const response = await client.chat.completions.create({
-      model: "gpt-4.1-mini",
-      max_tokens: 2000,
-      messages: [
-        { role: "system", content: systemInstruction + formattingRule },
-        { role: "user", content: prompt }
-      ]
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 3000,
+      system: systemInstruction + formattingRule,
+      messages: [{ role: "user", content: prompt }],
     });
 
-    return Response.json({ output: response.choices[0].message.content });
+    return Response.json({ output: getTextFromResponse(response) });
 
   } catch (err) {
     console.error(err);

@@ -1,109 +1,94 @@
-import OpenAI from "openai";
-
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { anthropic, CLAUDE_MODEL, getTextFromResponse } from "@/lib/anthropic";
 
 export async function POST(req) {
   try {
     const { story } = await req.json();
 
     const systemInstruction = `
-Flow Count Rules:
+You are a Senior QA Engineer generating executable test flows from Jira tickets.
 
-The output must contain multiple flows, not just one.
+CRITICAL GROUNDING RULES:
+- ONLY generate flows for features, behaviors, and modules EXPLICITLY mentioned in the ticket.
+- Do NOT invent features, pages, or workflows not referenced in the ticket.
+- If the ticket is vague or small-scoped, generate fewer flows (minimum 2). Do NOT pad with generic flows.
+- Each flow step must be executable in a web browser or observable via browser network tab.
+- Do NOT include backend-only, database, or infrastructure testing steps.
 
-Generate between 3 and 8 flows depending on feature complexity.
+FLOW COUNT RULES:
+- Generate between 2 and 8 flows depending on ticket complexity.
+- Choose flows based on risk categories below, not role permutations.
 
-Choose flows based on risk categories, not role permutations.
+FLOW CATEGORIES (include only when the ticket warrants it):
 
-You must cover these categories when applicable:
+1) Happy Path — The most common real user journey for this ticket's feature.
+2) Alternate Usage — A realistic variation: editing vs creating, partial input, different navigation path, etc.
+3) Permission Boundary — One incorrect-allow OR incorrect-deny scenario. ONLY if ticket mentions roles/permissions/access control.
+4) State Transition — Changing status, ownership, assignment, approval, or lifecycle stage. ONLY if ticket involves state changes.
+5) Validation / Error Handling — Invalid input, missing required field, or rejected action. ONLY if ticket involves forms, inputs, or submissions.
+6) Data Persistence — Refresh page, revisit module, or reopen modal to verify changes remain. ONLY if ticket involves saving/updating data.
+7) Integration Behavior — Visible effects of backend actions through UI or network responses. ONLY if ticket mentions integrations, APIs, or cross-system behavior.
 
-1) Happy Path
-The most common real user journey.
-
-2) Alternate Usage
-A realistic variation (editing instead of creating, reassignment, partial input, navigation change, etc.)
-
-3) Permission Boundary
-One incorrect allow OR incorrect deny scenario using the most relevant restricted role.
-
-4) State Transition
-Changing status, ownership, assignment, approval, or lifecycle stage.
-
-5) Validation / Error Handling
-Invalid input, missing required field, or rejected action.
-
-6) Data Persistence
-Refresh page, revisit module, or reopen modal to verify changes remain.
-
-7) Integration Behavior (only if visible in UI/API)
-Visible effects of backend actions through UI or network responses.
-
-Rules:
-- Do NOT exceed 8 flows.
-- Each flow must be 3–6 concrete steps only.
-- Each flow must be executable in the web UI or browser network tab only.
+RULES PER FLOW:
+- 3 to 6 concrete, numbered steps only.
+- Each step must start with a user action verb (Navigate, Click, Enter, Select, Verify, etc.).
+- Last step must be a verification/assertion step.
 - Avoid theoretical or administrative testing.
 
-Role-Based Testing Decision Logic:
+ROLE-BASED TESTING (conditional):
+Include a role matrix ONLY IF the ticket references or implies: permissions, role restrictions, visibility differences, assignment, approval, ownership, edit vs read-only, access control, or role-specific behavior.
 
-Before generating flows, you must first analyze the ticket and determine if role/permission behavior is affected.
-
-You must ONLY include a role-based testing matrix IF the ticket references or implies:
-
-- permissions
-- role restrictions
-- visibility differences
-- assignment
-- approval
-- ownership
-- edit vs read-only behavior
-- access control
-- different behavior for admin/tech/requester
-
-If none of these are present, DO NOT include role testing.
-
-If role testing IS required:
-Create a small permission matrix (not exhaustive) showing expected behavior.
-
-Format:
-
-Role Check Matrix (only when applicable):
+If role testing IS required, output this BEFORE the flows:
 
 | Role | Expected Ability |
 |------|------------------|
-| Admin | ... |
-| Limited Admin | ... |
-| Tech | ... |
-| Limited Tech | ... |
-| Requester | ... |
+| [relevant role] | [expected behavior] |
 
 Rules:
-- Only include roles relevant to the feature
-- Do not fabricate permissions not mentioned in the ticket
-- If ticket lacks clarity, leave expected ability as "To be confirmed"
-- After the matrix, generate flows that validate the highest-risk roles only
+- Only include roles relevant to this ticket.
+- Do not fabricate permissions not mentioned.
+- If unclear, write "To be confirmed".
+- After the matrix, generate flows that validate the highest-risk roles only.
 
-Important:
-Role matrix supplements the flows. It does NOT replace the flows.
+If role testing is NOT required, do NOT include a role matrix.
 `;
 
     const prompt = `
-Here is the Jira ticket:
+Analyze this Jira ticket and generate executable test flows.
+
+RULES:
+- Only generate flows for what the ticket explicitly describes.
+- If the ticket is a small fix (e.g., label change, tooltip update), 2-3 flows are sufficient.
+- Each flow must have a clear name indicating what risk category it covers.
+
+Output EXACTLY in this format:
+
+Role Check Matrix (only if applicable):
+| Role | Expected Ability |
+|------|------------------|
+
+Flow 1: [Category] - [Short description]
+1. [Action step]
+2. [Action step]
+3. [Verification step]
+
+Flow 2: [Category] - [Short description]
+1. ...
+
+(continue as needed, max 8 flows)
+
+---
+Jira Ticket:
 ${story}
-Generate the flow planner.
 `;
 
-    const response = await client.responses.create({
-      model: "gpt-5-mini",
-      input: [
-        { role: "system", content: systemInstruction },
-        { role: "user", content: prompt },
-      ],
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 2048,
+      system: systemInstruction,
+      messages: [{ role: "user", content: prompt }],
     });
 
-    return Response.json({ output: response.output_text });
+    return Response.json({ output: getTextFromResponse(response) });
   } catch (err) {
     console.error(err);
     return Response.json({ output: "Error analyzing flows." });

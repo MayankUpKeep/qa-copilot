@@ -180,7 +180,7 @@ useEffect(() => {
             }
           }
           if (pastedFiles.length > 0) {
-            const newFiles = [...images, ...pastedFiles].slice(0, 3);
+            const newFiles = [...images, ...pastedFiles].slice(0, 6);
             setImages(newFiles);
             const previews = await generateImagePreviews(newFiles);
             setImagePreviews(previews);
@@ -190,14 +190,14 @@ useEffect(() => {
       />
 
       <div className="mb-4">
-        <label className="block font-medium mb-1">Attach up to 3 images (screenshots, etc):</label>
+        <label className="block font-medium mb-1">Attach up to 6 images (screenshots, etc):</label>
         <input
           type="file"
           accept="image/*"
           multiple
           ref={fileInputRef}
           onChange={async (e) => {
-            const files = Array.from(e.target.files).slice(0, 3);
+            const files = Array.from(e.target.files).slice(0, 6);
             setImages(files);
             const previews = await generateImagePreviews(files);
             setImagePreviews(previews);
