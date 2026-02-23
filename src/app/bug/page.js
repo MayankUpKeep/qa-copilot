@@ -2,14 +2,15 @@
 
 import { useState, useEffect } from "react";
 import InfoTooltip from "@/components/InfoTooltip";
+import JiraFetch from "@/components/JiraFetch";
+import GitHubPRFetch from "@/components/GitHubPRFetch";
 
 export default function BugPage() {
   const [bug, setBug] = useState("");
+  const [prContext, setPrContext] = useState("");
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  /* ---------------- GENERATE BUG ---------------- */
 
   const generateBug = async (incomingText) => {
     const textToUse = incomingText || bug;
@@ -18,20 +19,23 @@ export default function BugPage() {
     setLoading(true);
     setResult("");
 
+    const combinedInput = prContext
+      ? textToUse + "\n\n--- PR / Code Changes ---\n\n" + prContext
+      : textToUse;
+
     try {
       const res = await fetch("/api/generate-bug", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ bug: textToUse }),
+        body: JSON.stringify({ bug: combinedInput }),
       });
 
       const data = await res.json();
       setResult(data.output);
       setLoading(false);
 
-      // If opened from Jira extension → auto copy
       if (incomingText) {
         await navigator.clipboard.writeText(data.output);
         alert("Improved bug copied to clipboard!");
@@ -43,8 +47,6 @@ export default function BugPage() {
     }
   };
 
-  /* ---------------- AUTO-RUN WHEN OPENED FROM JIRA ---------------- */
-
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const jira = params.get("jira");
@@ -52,17 +54,12 @@ export default function BugPage() {
     if (!jira) return;
 
     const decoded = decodeURIComponent(jira);
-
-    // fill textarea so user can see source
     setBug(decoded);
 
-    // give React time to render updated state
     setTimeout(() => {
       generateBug(decoded);
     }, 600);
   }, []);
-
-  /* ---------------- COPY BUTTON (MANUAL MODE) ---------------- */
 
   const copyToClipboard = async () => {
     if (!result) return;
@@ -71,18 +68,36 @@ export default function BugPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  /* ---------------- UI ---------------- */
-
   return (
     <div>
       <h2 className="text-2xl font-semibold mb-6">Bug Report Generator</h2>
-
-      <textarea
-        className="w-full min-h-[250px] p-4 border border-gray-300 rounded-lg mb-4 bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-red-500"
-        placeholder="Describe the issue in 1-2 lines (what happened)..."
-        value={bug}
-        onChange={(e) => setBug(e.target.value)}
+      <JiraFetch
+        onFetched={(text) => setBug(text)}
+        onPrFetched={(text) => setPrContext(text)}
+        colorClass="red"
       />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Bug Description</label>
+          <textarea
+            className="w-full min-h-[250px] p-4 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-red-500"
+            placeholder="Describe the issue in 1-2 lines (what happened)..."
+            value={bug}
+            onChange={(e) => setBug(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">PR / Code Changes</label>
+          <GitHubPRFetch onFetched={(text) => setPrContext((prev) => prev ? prev + "\n\n" + text : text)} colorClass="orange" />
+          <textarea
+            className="w-full min-h-[210px] p-4 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-orange-500"
+            placeholder="Auto-populated from Jira linked PRs, or fetch a PR manually above..."
+            value={prContext}
+            onChange={(e) => setPrContext(e.target.value)}
+          />
+        </div>
+      </div>
 
       <div className="flex gap-3">
         <button
@@ -95,6 +110,7 @@ export default function BugPage() {
         <button
           onClick={() => {
             setBug("");
+            setPrContext("");
             setResult("");
           }}
           className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors font-medium"

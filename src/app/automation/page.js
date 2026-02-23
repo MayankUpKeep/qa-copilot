@@ -2,9 +2,12 @@
 
 import { useState } from "react";
 import InfoTooltip from "@/components/InfoTooltip";
+import JiraFetch from "@/components/JiraFetch";
+import GitHubPRFetch from "@/components/GitHubPRFetch";
 
 export default function AutomationPage() {
   const [story, setStory] = useState("");
+  const [prContext, setPrContext] = useState("");
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -15,12 +18,16 @@ export default function AutomationPage() {
     setLoading(true);
     setResult("");
 
+    const combinedInput = prContext
+      ? story + "\n\n--- PR / Code Changes ---\n\n" + prContext
+      : story;
+
     const res = await fetch("/api/generate-automation", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ story }),
+      body: JSON.stringify({ story: combinedInput }),
     });
 
     const data = await res.json();
@@ -38,13 +45,33 @@ export default function AutomationPage() {
   return (
     <div>
       <h2 className="text-2xl font-semibold mb-6">Playwright Test Generator</h2>
-
-      <textarea
-        className="w-full min-h-[240px] p-4 border border-gray-300 rounded-lg mb-4 bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-green-500"
-        placeholder="Paste Jira story or acceptance criteria..."
-        value={story}
-        onChange={(e) => setStory(e.target.value)}
+      <JiraFetch
+        onFetched={(text) => setStory(text)}
+        onPrFetched={(text) => setPrContext(text)}
+        colorClass="green"
       />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Ticket / Story</label>
+          <textarea
+            className="w-full min-h-[240px] p-4 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-green-500"
+            placeholder="Paste Jira story or acceptance criteria..."
+            value={story}
+            onChange={(e) => setStory(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">PR / Code Changes</label>
+          <GitHubPRFetch onFetched={(text) => setPrContext((prev) => prev ? prev + "\n\n" + text : text)} colorClass="orange" />
+          <textarea
+            className="w-full min-h-[200px] p-4 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-orange-500"
+            placeholder="Auto-populated from Jira linked PRs, or fetch a PR manually above..."
+            value={prContext}
+            onChange={(e) => setPrContext(e.target.value)}
+          />
+        </div>
+      </div>
 
       <div className="flex gap-3">
         <button
@@ -56,6 +83,7 @@ export default function AutomationPage() {
         <button
           onClick={() => {
             setStory("");
+            setPrContext("");
             setResult("");
           }}
           className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors font-medium"

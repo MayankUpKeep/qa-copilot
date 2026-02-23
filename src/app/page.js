@@ -2,10 +2,13 @@
 
 import { useState, useEffect, useRef } from "react";
 import InfoTooltip from "@/components/InfoTooltip";
+import JiraFetch from "@/components/JiraFetch";
+import GitHubPRFetch from "@/components/GitHubPRFetch";
 
 
 export default function Home() {
   const [story, setStory] = useState("");
+  const [prContext, setPrContext] = useState("");
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -32,84 +35,83 @@ export default function Home() {
     return previews;
   };
 
+  const generatePlan = async (overrideStory = null) => {
+    const finalStory = overrideStory || story;
+    if (!finalStory) return;
 
+    setLoading(true);
+    setResult("");
 
-const generatePlan = async (overrideStory = null) => {
-  const finalStory = overrideStory || story;
-  if (!finalStory) return;
+    const combinedInput = prContext
+      ? finalStory + "\n\n--- PR / Code Changes ---\n\n" + prContext
+      : finalStory;
 
-  setLoading(true);
-  setResult("");
-
-  let imageData = [];
-  if (images.length > 0) {
-    // Handle both File objects (from file input) and image objects with dataUrl (from extension)
-    for (const img of images) {
-      if (img.dataUrl) {
-        // Already a data URL from extension
-        imageData.push({
-          name: img.name || "image",
-          type: "image",
-          data: img.dataUrl
-        });
-      } else if (img instanceof File) {
-        // File object - convert to base64
-        const reader = new FileReader();
-        await new Promise((resolve) => {
-          reader.onload = (e) => {
-            imageData.push({
-              name: img.name,
-              type: img.type,
-              data: e.target.result
-            });
-            resolve();
-          };
-          reader.readAsDataURL(img);
-        });
+    let imageData = [];
+    if (images.length > 0) {
+      for (const img of images) {
+        if (img.dataUrl) {
+          imageData.push({
+            name: img.name || "image",
+            type: "image",
+            data: img.dataUrl
+          });
+        } else if (img instanceof File) {
+          const reader = new FileReader();
+          await new Promise((resolve) => {
+            reader.onload = (e) => {
+              imageData.push({
+                name: img.name,
+                type: img.type,
+                data: e.target.result
+              });
+              resolve();
+            };
+            reader.readAsDataURL(img);
+          });
+        }
       }
     }
-  }
 
-  const res = await fetch("/api/generate-plan", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ story: finalStory, images: imageData }),
-  });
+    const res = await fetch("/api/generate-plan", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ story: combinedInput, images: imageData }),
+    });
 
-  const data = await res.json();
-  setResult(data.output);
-  setLoading(false);
-};
+    const data = await res.json();
+    setResult(data.output);
+    setLoading(false);
+  };
 
-useEffect(() => {
-  const params = new URLSearchParams(window.location.search);
-  const jira = params.get("jira");
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const jira = params.get("jira");
 
-  if (!jira) return;
+    if (!jira) return;
 
-  const decoded = decodeURIComponent(jira);
+    const decoded = decodeURIComponent(jira);
 
-  setStory(decoded);
-  localStorage.setItem("qa_story", decoded);
+    setStory(decoded);
+    localStorage.setItem("qa_story", decoded);
 
-  setTimeout(() => {
-    generatePlan(decoded);
-  }, 300);
-}, []);
+    setTimeout(() => {
+      generatePlan(decoded);
+    }, 300);
+  }, []);
 
 
   const copyToClipboard = async () => {
-  if (!result) return;
-  await navigator.clipboard.writeText(result);
+    if (!result) return;
+    await navigator.clipboard.writeText(result);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-
   const clearWorkspace = () => {
     setStory("");
+    setPrContext("");
     setResult("");
     setImages([]);
     setImagePreviews([]);
@@ -118,8 +120,6 @@ useEffect(() => {
     if (fileInputRef.current) fileInputRef.current.value = null;
   };
 
-
-  // Load saved data on page load
   useEffect(() => {
     const savedStory = localStorage.getItem("qa_story");
     const savedResult = localStorage.getItem("qa_result");
@@ -127,7 +127,6 @@ useEffect(() => {
     if (savedStory) setStory(savedStory);
     if (savedResult) setResult(savedResult);
 
-    // check if extension sent Jira ticket
     fetch("/api/jira-import")
       .then((res) => res.json())
       .then((data) => {
@@ -141,53 +140,56 @@ useEffect(() => {
 
   return (
     <div>
-
       <h2 className="text-2xl font-semibold mb-6">Test Plan Generator</h2>
-      <div className="flex gap-3 mb-4">
-        <button
-          onClick={() => generatePlan()}
-          className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-        >
-          {loading ? "Generating..." : "Generate Test Plan"}
-        </button>
-        <button
-          onClick={clearWorkspace}
-          className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors font-medium"
-        >
-          Clear Workspace
-        </button>
-        <InfoTooltip description="Creates comprehensive test plans from Jira stories or requirements. Generates detailed test scenarios, edge cases, and coverage analysis." />
-      </div>
-
-
-      <textarea
-        className="w-full min-h-[250px] p-4 border border-gray-300 rounded-lg mb-2 bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
-        placeholder="Paste the full Jira story or bug description here..."
-        value={story}
-        onChange={(e) => {
-          setStory(e.target.value);
-          localStorage.setItem("qa_story", e.target.value);
-        }}
-        onPaste={async (e) => {
-          if (!e.clipboardData) return;
-          const items = e.clipboardData.items;
-          const pastedFiles = [];
-          for (let i = 0; i < items.length; i++) {
-            const item = items[i];
-            if (item.kind === "file" && item.type.startsWith("image/")) {
-              const file = item.getAsFile();
-              if (file) pastedFiles.push(file);
-            }
-          }
-          if (pastedFiles.length > 0) {
-            const newFiles = [...images, ...pastedFiles].slice(0, 6);
-            setImages(newFiles);
-            const previews = await generateImagePreviews(newFiles);
-            setImagePreviews(previews);
-            e.preventDefault();
-          }
-        }}
+      <JiraFetch
+        onFetched={(text) => { setStory(text); localStorage.setItem("qa_story", text); }}
+        onPrFetched={(text) => setPrContext(text)}
+        colorClass="blue"
       />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Ticket / Story</label>
+          <textarea
+            className="w-full min-h-[250px] p-4 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Paste the full Jira story or bug description here..."
+            value={story}
+            onChange={(e) => {
+              setStory(e.target.value);
+              localStorage.setItem("qa_story", e.target.value);
+            }}
+            onPaste={async (e) => {
+              if (!e.clipboardData) return;
+              const items = e.clipboardData.items;
+              const pastedFiles = [];
+              for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (item.kind === "file" && item.type.startsWith("image/")) {
+                  const file = item.getAsFile();
+                  if (file) pastedFiles.push(file);
+                }
+              }
+              if (pastedFiles.length > 0) {
+                const newFiles = [...images, ...pastedFiles].slice(0, 6);
+                setImages(newFiles);
+                const previews = await generateImagePreviews(newFiles);
+                setImagePreviews(previews);
+                e.preventDefault();
+              }
+            }}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">PR / Code Changes</label>
+          <GitHubPRFetch onFetched={(text) => setPrContext((prev) => prev ? prev + "\n\n" + text : text)} colorClass="orange" />
+          <textarea
+            className="w-full min-h-[210px] p-4 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-orange-500"
+            placeholder="Auto-populated from Jira linked PRs, or fetch a PR manually above..."
+            value={prContext}
+            onChange={(e) => setPrContext(e.target.value)}
+          />
+        </div>
+      </div>
 
       <div className="mb-4">
         <label className="block font-medium mb-1">Attach up to 6 images (screenshots, etc):</label>
@@ -223,8 +225,21 @@ useEffect(() => {
         <div className="text-xs text-gray-500 mt-1">You can also paste images directly into the description box.</div>
       </div>
 
-
-
+      <div className="flex gap-3 mb-4">
+        <button
+          onClick={() => generatePlan()}
+          className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+        >
+          {loading ? "Generating..." : "Generate Test Plan"}
+        </button>
+        <button
+          onClick={clearWorkspace}
+          className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors font-medium"
+        >
+          Clear Workspace
+        </button>
+        <InfoTooltip description="Creates comprehensive test plans from Jira stories or requirements. Generates detailed test scenarios, edge cases, and coverage analysis." />
+      </div>
 
       {result && (
          <div className="mt-8">
