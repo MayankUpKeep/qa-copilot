@@ -22,6 +22,15 @@ Set your Anthropic API key before running:
 echo "ANTHROPIC_API_KEY=your_key_here" > .env.local
 ```
 
+Optional: to ground **regression analysis** in your app structure (web-app routes + core-service endpoints), clone the repos locally and set in `.env.local`:
+
+```bash
+WEB_APP_PATH=/path/to/web-app
+CORE_SERVICE_PATH=/path/to/core-service
+```
+
+Example (Windows): `WEB_APP_PATH=D:\repos\web-app` and `CORE_SERVICE_PATH=D:\repos\core-service`. The Regression page will use this map so suggested impacted areas reference real routes and APIs.
+
 You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

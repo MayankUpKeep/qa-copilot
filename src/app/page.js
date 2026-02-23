@@ -14,7 +14,17 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [images, setImages] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
+  const [includePr, setIncludePr] = useState(false);
+  const [useAppMap, setUseAppMap] = useState(true);
+  const [appMapStatus, setAppMapStatus] = useState(null);
   const fileInputRef = useRef();
+
+  useEffect(() => {
+    fetch("/api/app-map")
+      .then((r) => r.json())
+      .then((data) => setAppMapStatus(data))
+      .catch(() => setAppMapStatus({ ok: false, hasMap: false }));
+  }, []);
 
   const generateImagePreviews = async (fileList) => {
     const previews = [];
@@ -42,7 +52,7 @@ export default function Home() {
     setLoading(true);
     setResult("");
 
-    const combinedInput = prContext
+    const combinedInput = (includePr && prContext)
       ? finalStory + "\n\n--- PR / Code Changes ---\n\n" + prContext
       : finalStory;
 
@@ -77,7 +87,7 @@ export default function Home() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ story: combinedInput, images: imageData }),
+      body: JSON.stringify({ story: combinedInput, images: imageData, useAppMap }),
     });
 
     const data = await res.json();
@@ -143,11 +153,11 @@ export default function Home() {
       <h2 className="text-2xl font-semibold mb-6">Test Plan Generator</h2>
       <JiraFetch
         onFetched={(text) => { setStory(text); localStorage.setItem("qa_story", text); }}
-        onPrFetched={(text) => setPrContext(text)}
+        onPrFetched={(text) => { setPrContext(text); if (text) setIncludePr(true); }}
         colorClass="blue"
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+      <div className={`grid gap-4 mb-4 ${includePr ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"}`}>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Ticket / Story</label>
           <textarea
@@ -179,16 +189,18 @@ export default function Home() {
             }}
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">PR / Code Changes</label>
-          <GitHubPRFetch onFetched={(text) => setPrContext((prev) => prev ? prev + "\n\n" + text : text)} colorClass="orange" />
-          <textarea
-            className="w-full min-h-[210px] p-4 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-orange-500"
-            placeholder="Auto-populated from Jira linked PRs, or fetch a PR manually above..."
-            value={prContext}
-            onChange={(e) => setPrContext(e.target.value)}
-          />
-        </div>
+        {includePr && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">PR / Code Changes</label>
+            <GitHubPRFetch onFetched={(text) => setPrContext((prev) => prev ? prev + "\n\n" + text : text)} colorClass="orange" />
+            <textarea
+              className="w-full min-h-[210px] p-4 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-orange-500"
+              placeholder="Auto-populated from Jira linked PRs, or fetch a PR manually above..."
+              value={prContext}
+              onChange={(e) => setPrContext(e.target.value)}
+            />
+          </div>
+        )}
       </div>
 
       <div className="mb-4">
@@ -225,6 +237,36 @@ export default function Home() {
         <div className="text-xs text-gray-500 mt-1">You can also paste images directly into the description box.</div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={includePr}
+            onChange={(e) => setIncludePr(e.target.checked)}
+            className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+          />
+          <span className="text-sm text-gray-700">Include PR / code changes</span>
+        </label>
+        <span className="text-gray-300">|</span>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={useAppMap}
+            onChange={(e) => setUseAppMap(e.target.checked)}
+            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-sm text-gray-700">Include regression areas (web-app + core-service)</span>
+        </label>
+        {appMapStatus?.hasMap && (
+          <span className="text-xs text-gray-500">
+            {appMapStatus.routes?.length || 0} routes, {(appMapStatus.coreEndpoints?.length || 0) + (appMapStatus.webEndpoints?.length || 0)} endpoints mapped
+          </span>
+        )}
+        {appMapStatus && !appMapStatus.hasMap && appMapStatus.ok && (
+          <span className="text-xs text-amber-600">Set WEB_APP_PATH and CORE_SERVICE_PATH in .env.local to enable.</span>
+        )}
+      </div>
+
       <div className="flex gap-3 mb-4">
         <button
           onClick={() => generatePlan()}
@@ -238,7 +280,7 @@ export default function Home() {
         >
           Clear Workspace
         </button>
-        <InfoTooltip description="Creates comprehensive test plans from Jira stories or requirements. Generates detailed test scenarios, edge cases, and coverage analysis." />
+        <InfoTooltip description="Creates comprehensive test plans from Jira stories or requirements. With regression areas enabled, impact analysis is grounded in your web-app routes and core-service endpoints." />
       </div>
 
       {result && (

@@ -29,10 +29,6 @@ export default function RootLayout({ children }) {
               Retest Assistant
             </Link>
 
-            <Link href="/analyze" className="hover:text-red-300 transition">
-              Log Analyzer
-            </Link>
-
             <Link href="/automation" className="hover:text-green-300 transition">
               Automation
             </Link>
@@ -45,12 +41,8 @@ export default function RootLayout({ children }) {
               Screenshot Bug
             </Link>
 
-            <Link href="/regression" className="hover:text-orange-300 transition">
-              Regression
-            </Link>
-
-            <Link href="/flows" className="hover:text-teal-300 transition">
-              Flow Planner
+            <Link href="/evaluate" className="hover:text-cyan-300 transition">
+              Evaluate
             </Link>
 
             <Link href="/smoke" className="hover:text-indigo-300 transition">

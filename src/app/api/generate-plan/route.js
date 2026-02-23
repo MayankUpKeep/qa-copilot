@@ -1,9 +1,13 @@
 import { anthropic, CLAUDE_MODEL, getTextFromResponse } from "@/lib/anthropic";
+import { getAppContext, formatAppContextForPrompt } from "@/lib/app-mapper";
 
 
 export async function POST(req) {
   try {
-    const { story, images = [] } = await req.json();
+    const { story, images = [], useAppMap = true } = await req.json();
+
+    const appContext = useAppMap ? getAppContext({}) : null;
+    const appMapBlock = appContext ? formatAppContextForPrompt(appContext) : "";
 
     let imageSection = "";
     if (images && images.length > 0) {
@@ -58,6 +62,13 @@ EDGE CASE HANDLING:
 - If the ticket content is very short (under 50 words) or vague, produce a minimal test plan and add at the top: "⚠ Ticket lacks detail — test plan is limited. Request clarification from the team before testing."
 - If the ticket is purely cosmetic (label, color, text change), limit to 3-5 scenarios max and skip sections that don't apply (e.g., skip Race Conditions, skip TP Technical Requirements).
 - If no images are attached and the ticket references UI behavior, note: "No images provided — scenarios based on text description only. Visual verification recommended."
+${appMapBlock ? `
+REGRESSION IMPACT ANALYSIS (when application map is provided):
+- Use the list of frontend routes and backend endpoints to identify regression areas.
+- Only suggest areas (routes, endpoints, modules) that appear in the application map.
+- Classify each impacted area by risk level: High (directly modified behavior or shared data/API/component), Medium (adjacent features in the same module), Low (related but unlikely to break).
+- Do NOT invent route or API names not in the map.
+- If the ticket is too vague or small-scoped to determine impact, note: "Regression scope is minimal for this ticket."` : ""}
 `;
 
 const formattingRule = `
@@ -162,13 +173,23 @@ Race Condition Scenarios (if applicable):
 | # | Conflicting Actions | Timing | Expected Behavior | Type |
 |---|---------------------|--------|-------------------|------|
 | 1 | [action A vs action B] | [simultaneous / rapid succession] | [which should win, error shown, etc.] | Manual / Automatable |
+${appMapBlock ? `
+Regression Impact Areas:
+| Area (route / endpoint / module) | Risk Level | Reason |
+|----------------------------------|-----------|--------|
+| [specific route or endpoint from app map] | High / Medium / Low | [why this area could be affected by this ticket's changes] |
+
+Regression Retest Checklist:
+1. [Executable test step targeting a regression area above] → [Expected result]
+2. ...
+` : ""}
 `;
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 3000,
+      max_tokens: 4096,
       system: systemInstruction + formattingRule,
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "user", content: prompt + appMapBlock }],
     });
 
     return Response.json({ output: getTextFromResponse(response) });
