@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import InfoTooltip from "@/components/InfoTooltip";
 import JiraFetch from "@/components/JiraFetch";
 import GitHubPRFetch from "@/components/GitHubPRFetch";
+import FormattedOutput from "@/components/FormattedOutput";
 
 export default function BugPage() {
   const [bug, setBug] = useState("");
@@ -133,9 +134,7 @@ export default function BugPage() {
           </div>
 
           <div className="p-6 bg-white rounded-lg border border-gray-300">
-            <pre className="whitespace-pre-wrap text-gray-900 text-sm leading-7 font-mono">
-              {result}
-            </pre>
+            <FormattedOutput text={result} />
           </div>
         </div>
       )}

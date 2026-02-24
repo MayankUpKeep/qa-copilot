@@ -4,6 +4,7 @@ import { useState } from "react";
 import InfoTooltip from "@/components/InfoTooltip";
 import JiraFetch from "@/components/JiraFetch";
 import GitHubPRFetch from "@/components/GitHubPRFetch";
+import FormattedOutput from "@/components/FormattedOutput";
 
 export default function AutomationPage() {
   const [story, setStory] = useState("");
@@ -105,9 +106,7 @@ export default function AutomationPage() {
           </div>
 
           <div className="p-6 bg-white rounded-lg border border-gray-300 overflow-auto">
-            <pre className="whitespace-pre text-gray-900 text-sm leading-7 font-mono">
-              {result}
-            </pre>
+            <FormattedOutput text={result} />
           </div>
         </div>
       )}

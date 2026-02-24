@@ -1,11 +1,14 @@
 import { anthropic, CLAUDE_MODEL, getTextFromResponse } from "@/lib/anthropic";
+import { getAppContext, formatAppContextForPrompt } from "@/lib/app-mapper";
 
 export async function POST(req) {
   try {
     const { input } = await req.json();
 
-    const systemInstruction = `
-You are a Senior QA Engineer creating a focused retest plan after a developer fix or PR merge.
+    const appContext = getAppContext({});
+    const appMapBlock = formatAppContextForPrompt(appContext);
+
+    const systemInstruction = `You are a Senior QA Engineer creating a focused retest plan after a developer fix or PR merge.
 
 PURPOSE: Unlike regression analysis (which identifies what MIGHT break elsewhere), retest analysis focuses on verifying the FIX ITSELF works correctly and the original bug is resolved.
 
@@ -20,18 +23,12 @@ RETEST STRATEGY:
 2. Test variations of the same scenario (same feature, different data/states).
 3. Identify negative tests specific to the fix (what could fail NOW because of the change).
 4. Suggest specific test data that would exercise the fix.
-`;
+${appMapBlock ? "\nREGRESSION GROUNDING:\n- Use the application map below to identify real routes and endpoints adjacent to the fix.\n- Only reference actual routes/endpoints from the map when suggesting regression spots." : ""}`;
 
-    const prompt = `
-Analyze these developer fix notes and produce a retest plan.
+    const prompt = `Developer notes:
+${input}
 
-RULES:
-- Focus on verifying the fix itself, not broad regression.
-- Every item must trace back to the developer notes.
-- Test steps must be executable in UI or verifiable via browser network tab.
-- If notes are vague, keep the plan short and flag it.
-
-Output EXACTLY in this structure:
+Produce the retest plan in this structure:
 
 Fix Understanding:
 (What changed, in simple QA terms. 2-3 sentences max.)
@@ -44,23 +41,26 @@ Negative Tests (what could now fail):
 - [Scenario where the fix might introduce a new problem]
 - ...
 
-Regression Spots (directly adjacent only):
-- [Feature/behavior that shares code or data with the fix]
-- ...
-
 Suggested Test Data:
 | Data Type | Value / Description | Purpose |
 |-----------|-------------------|---------|
 | [Role/Account/State/Input] | [Specific value] | [Why this data exercises the fix] |
+${appMapBlock ? `
+Regression Spots:
+| Route / Endpoint / Module | Risk Level | Reason |
+|---------------------------|-----------|--------|
 
----
-Developer notes:
-${input}
-`;
+Regression Retest Checklist:
+1. [test step] → [expected result]
+` : `
+Regression Spots (directly adjacent only):
+- [Feature/behavior that shares code or data with the fix]
+`}
+${appMapBlock}`;
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 2048,
+      max_tokens: 3000,
       system: systemInstruction,
       messages: [{ role: "user", content: prompt }],
     });

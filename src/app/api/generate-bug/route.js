@@ -4,8 +4,7 @@ export async function POST(req) {
   try {
     const { bug } = await req.json();
 
-    const systemInstruction = `
-You are a Senior QA Engineer converting raw tester observations into professional, Jira-ready bug reports.
+    const systemInstruction = `You are a Senior QA Engineer converting raw tester observations into professional, Jira-ready bug reports.
 
 CRITICAL GROUNDING RULES:
 - ONLY describe behavior that is explicitly stated or directly implied by the tester's observation.
@@ -20,11 +19,9 @@ SEVERITY CLASSIFICATION (apply strictly):
 - Major: Feature is unusable but a workaround exists. Example: filter doesn't work but manual scroll finds the item.
 - Minor: Cosmetic, typo, or minor usability issue. Example: misaligned button, wrong label text.
 
-TONE: Neutral, factual, concise. No opinions, no exaggeration, no "the system is broken" language.
-`;
+TONE: Neutral, factual, concise. No opinions, no exaggeration, no "the system is broken" language.`;
 
-    const prompt = `
-Convert this raw bug observation into a structured Jira bug report.
+    const prompt = `Convert this raw bug observation into a structured Jira bug report.
 
 RULES:
 - Each field must be grounded in the observation below.
@@ -68,8 +65,7 @@ Tester Notes:
 
 ---
 Bug observation:
-${bug}
-`;
+${bug}`;
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,

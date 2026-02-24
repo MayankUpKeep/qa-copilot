@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import InfoTooltip from "@/components/InfoTooltip";
 import JiraFetch from "@/components/JiraFetch";
 import GitHubPRFetch from "@/components/GitHubPRFetch";
+import FormattedOutput from "@/components/FormattedOutput";
 
 
 export default function Home() {
@@ -14,6 +15,7 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [images, setImages] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
+  const [ticketLabels, setTicketLabels] = useState([]);
   const [includePr, setIncludePr] = useState(false);
   const [useAppMap, setUseAppMap] = useState(true);
   const [appMapStatus, setAppMapStatus] = useState(null);
@@ -87,7 +89,7 @@ export default function Home() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ story: combinedInput, images: imageData, useAppMap }),
+      body: JSON.stringify({ story: combinedInput, images: imageData, useAppMap, labels: ticketLabels }),
     });
 
     const data = await res.json();
@@ -152,8 +154,12 @@ export default function Home() {
     <div>
       <h2 className="text-2xl font-semibold mb-6">Test Plan Generator</h2>
       <JiraFetch
-        onFetched={(text) => { setStory(text); localStorage.setItem("qa_story", text); }}
+        onFetched={(text, ticket) => { setStory(text); localStorage.setItem("qa_story", text); if (ticket?.labels) setTicketLabels(ticket.labels); }}
         onPrFetched={(text) => { setPrContext(text); if (text) setIncludePr(true); }}
+        onImagesFetched={(imgs) => {
+          setImages(imgs);
+          setImagePreviews(imgs.map((img) => ({ data: img.dataUrl, name: img.name, type: img.mimeType })));
+        }}
         colorClass="blue"
       />
 
@@ -295,9 +301,7 @@ export default function Home() {
           </div>
 
           <div className="p-6 bg-white rounded-lg border border-gray-300">
-            <pre className="whitespace-pre-wrap text-gray-900 text-sm leading-7 font-mono">
-              {result}
-            </pre>
+            <FormattedOutput text={result} />
           </div>
         </div>
       )}

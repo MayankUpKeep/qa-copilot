@@ -6,8 +6,7 @@ export async function POST(req) {
 
     const hasNotes = notes && notes.trim().length > 0;
 
-    const systemInstruction = `
-You are a senior QA Engineer writing a Jira verification comment after testing a fix or feature.
+    const systemInstruction = `You are a senior QA Engineer writing a Jira verification comment after testing a fix or feature.
 
 CRITICAL GROUNDING RULES:
 - ONLY describe verifications that are directly supported by the story content or tester notes.
@@ -21,11 +20,9 @@ OUTPUT QUALITY:
 - The comment should be directly pasteable into Jira without editing.
 - Tone: professional, concise, confident. Not robotic, not verbose.
 - Do NOT repeat or summarize the story description back. Go straight to what was verified.
-- Each bullet must describe a specific action and its observed result — not a vague claim.
-`;
+- Each bullet must describe a specific action and its observed result — not a vague claim.`;
 
-    const prompt = `
-Write a QA verification sign-off comment for this Jira ticket.
+    const prompt = `Write a QA verification sign-off comment for this Jira ticket.
 
 Output EXACTLY in this format:
 
@@ -45,8 +42,7 @@ ${hasNotes ? "" : "Note: No specific tester notes were provided. Keep the commen
 Story:
 ${story}
 
-${hasNotes ? `Tester Notes:\n${notes}` : "Tester Notes: (none provided)"}
-`;
+${hasNotes ? `Tester Notes:\n${notes}` : "Tester Notes: (none provided)"}`;
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,

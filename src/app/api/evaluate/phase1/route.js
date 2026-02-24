@@ -3,71 +3,164 @@ import { getAppContext, formatAppContextForPrompt } from "@/lib/app-mapper";
 
 export async function POST(req) {
   try {
-    const { story } = await req.json();
+    const { story, labels = [] } = await req.json();
 
     const appContext = getAppContext({});
     const appMapBlock = formatAppContextForPrompt(appContext);
 
-    const systemInstruction = `
-You are a Senior QA Engineer thinking from the USER'S PERSPECTIVE.
+    const systemInstruction = `PURPOSE: Analyze the ticket from the END-USER's perspective to identify all positive and negative user flows, dependencies, and risks. The story is in "Ready" state — no code exists yet.
 
-MINDSET: You are the end-user of this application. You care about what you see, what you click, what happens when you do things, and whether the experience makes sense. You do NOT care about code, APIs, endpoints, or technical implementation.
+GROUNDING:
+- Think as the user: what you see, click, type, and experience. No APIs, endpoints, or code.
+- Test scenarios for the ticket's feature must trace to the ticket. Do NOT invent features.
+- HOWEVER: If the application map reveals connected screens or user flows that share navigation, data, or forms with the ticket's feature, you MUST include regression scenarios for those areas even if the ticket does not mention them. Do not miss scope.
+- Use plain language. No developer terminology.
+- If the ticket is vague, keep the plan minimal and flag: "Ticket lacks detail — request clarification."
 
-CONTEXT: The story is in "Ready" state — requirements are defined but no code exists yet. You are reading the ticket as a user would read a feature description and thinking: "How will I use this? What could go wrong for me?"
+COVERAGE:
+- Focus on user journeys, UX flows, and edge cases users would actually hit.
+- Include accessibility concerns only if the ticket mentions them.
+- Include permission/role checks only if the ticket references role-based behavior.
+- Do NOT include backend, API, or database tests — this is purely user-perspective.
 
-PURPOSE:
-- Think through every user journey this ticket describes.
-- Identify what a real user would do: happy paths, mistakes, edge cases, confusing flows.
-- Predict where the user experience could break, frustrate, or confuse.
-- Flag anything in the ticket that's unclear from a user's point of view.
+CONCURRENCY:
+- If the ticket involves concurrent user actions or rapid clicks, include race condition scenarios.
+- For each: describe the conflicting user actions, the timing, and the expected user experience.
+- If no concurrency, skip this section entirely.
 
-RULES:
-- Write EVERY scenario as a user action: "As a user, I navigate to...", "I click...", "I enter...", "I expect to see..."
-- Do NOT mention APIs, endpoints, database, code files, or technical details.
-- Do NOT use developer language. Use plain, user-facing language.
-- Focus on what the user SEES and DOES, not what the system does internally.
-- Think about: navigation, forms, buttons, messages, loading states, error states, permissions (from user's view), data display, edge cases in input.
-- If the ticket is vague from a user perspective, call it out.
-`;
+NEGATIVE TESTING:
+- For every user flow, identify what happens when the user does something wrong: bad input, missing fields, navigating away mid-action, unauthorized attempts, slow connection, unexpected sequences.
+- Negative scenarios must be grounded in the ticket.
 
-    const prompt = `
-Read this ticket as an end-user and create a test plan from the user's perspective.
+REGRESSION ANALYSIS:
+- The application map below contains real routes, API calls, endpoints, and modules from THREE codebases: web-app (main frontend), core-service (main backend), and vendor-management (additional service with its own frontend + backend).
+- Use TICKET LABELS to determine which codebases the ticket changes:
+  * Labels with "vendor-management" / "vendor-portal" → changes are in vendor-management codebase.
+  * Labels with "web-app" → changes are in web-app codebase.
+  * Labels with "core-service" → changes are in core-service codebase.
+  * If no labels, infer from ticket content.
+- Scan the AFFECTED codebases first (based on labels), then check the OTHER codebases for cross-service regression from the user's perspective.
+- For each connected route/screen, assess the regression risk from the user's perspective.
+- ONLY list routes that actually appear in the application map. Do NOT invent paths.
+- If the app map is not available, skip the regression section.
 
-TICKET:
+ROLE-BASED TESTING:
+- Standard roles (web-app + core-service): Admin, Limited Admin, Technician, Limited Technician, View Only, Requester, Operator.
+- Vendor portal roles (vendor-management ONLY): Vendor, Contractor, Provider Admin, Provider Tech.
+- STEP 1 — Classify using TICKET LABELS (primary signal) + ticket content:
+  A) VENDOR PORTAL ONLY: Labels include "vendor-management", "vendor-portal", "provider-network" — OR ticket text mentions "vendor portal", "provider", "contractor" — AND NO labels for web-app/core-service AND ticket does NOT describe core/web features.
+  B) WEB-APP / CORE-SERVICE ONLY: Labels include "web-app", "core-service", or any non-vendor label — OR ticket is about work orders, assets, locations, PMs, parts, meters, purchase orders, people, settings, analytics — AND NO vendor labels present.
+  C) CROSS-SYSTEM: Labels include BOTH vendor AND core/web labels — OR ticket describes changes spanning both systems.
+- STEP 2 — Select roles:
+  A) VENDOR PORTAL ONLY → Use ONLY: Vendor, Contractor, Provider Admin, Provider Tech. Do NOT include Admin, Limited Admin, or any standard role.
+  B) WEB-APP / CORE-SERVICE ONLY → ALWAYS: Admin, Limited Admin. Add Technician, Limited Technician, View Only, Requester, or Operator ONLY if ticket mentions those roles or permission behavior. Do NOT include Vendor, Contractor, Provider Admin, or Provider Tech.
+  C) CROSS-SYSTEM → Include BOTH standard roles (Admin, Limited Admin + contextual) AND vendor portal roles.
+- Permission levels: Full, Partial (creator/assignee only), None.
+- Limited Technician: affiliation-based (only sees WOs assigned/created/team). Requester/Operator: own requests only.
+
+QUALITY:
+- Output must be directly pasteable into Jira. Use bullets and tables, no paragraphs or filler.
+- MANDATORY: If the application map is provided, you MUST include the "Regression Impact Areas" and "Regression Retest Checklist" sections. Never skip them.
+- NEVER mention labels, classification steps, STEP 1/STEP 2, or internal reasoning in the output. Just list the roles and their access — do not explain why they were chosen.`;
+
+    const labelsBlock = labels.length > 0 ? `\nTICKET LABELS: ${labels.join(", ")}\n` : "";
+
+    const prompt = `TICKET:
 ${story}
+${labelsBlock}
+Produce the test plan in this structure:
 
-Output EXACTLY in this structure:
+TP Feature Dependencies & Risks:
+- Are other teams or features impacted by this change? How?
+- Where can this feature/change be triggered, accessed, connected to, or interacted with?
+- What are the parity & compatibility expectations between this change and what existed before? How were customers using it and how will this require them to change their behavior?
+- What sample scenarios might admins use this for? And how would technicians use it? Where might this create confusion, redundancy, or unexpected behavior?
+- What don't we know or understand about this change, its workflows, triggers, use, interactions, and/or impacts?
 
-What This Means for the User:
-(2-3 sentences in plain language: what changes for the user, what they'll be able to do differently, and what they should notice.)
+TP Test Execution Dependencies & Risks:
+- What teams, stakeholders, expertise, tools, and systems are required to fully test this change?
+- What do we not understand about the change itself (great use of exploratory testing)?
+- What areas do we have concerns about being able to properly test given the tools and knowledge available?
 
-User Journeys to Test:
-| # | User Action | What User Expects to See | Priority |
-|---|------------|--------------------------|----------|
-| 1 | [step-by-step user action in plain language] | [what the screen shows, what feedback the user gets] | Critical / High / Medium / Low |
-| 2 | ... | ... | ... |
+TP Technical Requirements for Testing:
+- Roles to test (follow ROLE-BASED TESTING STEP 1 + STEP 2 strictly):
+  * First classify ticket as (A) Vendor Portal Only, (B) Web-App/Core-Service Only, or (C) Cross-System
+  * (A) Vendor Portal Only → Vendor, Contractor, Provider Admin, Provider Tech ONLY — no Admin or standard roles
+  * (B) Web-App/Core-Service Only → Admin, Limited Admin always; add other standard roles only if ticket mentions them — no vendor roles
+  * (C) Cross-System → both standard + vendor portal roles
+  * For each included role, state the expected user experience (what they see/do vs. what is restricted)
+- Access required or expected per role
+- Platforms & OS impacted
+- App versions to test (beta/legacy, version #)
+- Environments required for testing
+- Applicable flags and settings
+- Required backing data & data sources (starter account, specific data that exists or should not exist)
+- Test data sources
 
-Edge Cases (things users actually do):
-- [What if the user double-clicks the button?]
-- [What if the user enters unexpected input?]
-- [What if the user navigates away and comes back?]
-- [What if the user has slow internet?]
-- (Only include edge cases relevant to this ticket)
+TP Assumptions:
+- What is assumed but not stated in the ticket?
+
+TP Out of Scope:
+- What does the ticket explicitly say will NOT be covered?
+
+TP Testing Scope:
+- What user-facing features from the ticket will be tested?
+- One bullet per testable feature.
+
+TP Testing Approach:
+- Which tests will be covered by exploratory, manual test cases, or automation?
+- Who on the team will be testing the various items?
+- Will product, customer, or internal teams do any UAT or validation?
+- What prioritization or retesting strategies will be used?
+- How will roadblocks be handled?
+
+Role Access Matrix (for this ticket's feature — only include roles selected in STEP 2):
+| Role | Expected Access | What User Sees / Can Do |
+|------|----------------|------------------------|
+(A) If Vendor Portal Only: list Vendor, Contractor, Provider Admin, Provider Tech rows ONLY.
+(B) If Web-App/Core-Service Only: list Admin, Limited Admin rows + any contextual standard roles.
+(C) If Cross-System: list both standard + vendor portal role rows.
+
+Positive Test Scenarios:
+| # | Role | User Action | What User Expects to See | Priority | Type |
+|---|------|------------|--------------------------|----------|------|
+| 1 | Admin | [step-by-step in plain language — happy path] | [screen feedback] | Critical/High/Medium/Low | Manual/Automatable |
+| 2 | Limited Admin | [same or similar action] | [screen feedback] | Critical/High/Medium/Low | Manual/Automatable |
+
+Negative Test Scenarios:
+| # | Role | User Action (wrong/invalid) | What User Does Wrong | Expected Error / Feedback | Priority | Type |
+|---|------|----------------------------|---------------------|--------------------------|----------|------|
+| 1 | Admin | [bad input, missing field, navigate away, double-click] | [the mistake] | [error message, validation, blocked action] | High/Medium/Low | Manual/Automatable |
+
+Race Condition Scenarios (only if ticket involves concurrency):
+| # | Conflicting Actions | Timing | Expected Behavior | Type |
+|---|---------------------|--------|-------------------|------|
 
 Confusing or Unclear Areas:
-- [Parts of the ticket where user behavior is ambiguous]
-- [Missing information about what the user sees or how the UI behaves]
-- (Write "Ticket is clear from user perspective" if nothing is ambiguous)
+- Are there parts of the ticket where user behavior is ambiguous or undefined? If none, state "Ticket is clear."
+${appMapBlock ? `
+Regression Impact Areas:
+Use the ticket labels to identify which codebases are changed. Scan the application map for screens and routes that share navigation, data display, forms, or workflows with the ticket's feature. List every match from the user's perspective:
+| Screen / Route | Service (web-app / core-service / vendor-management) | Risk Level | Connection to Ticket |
+|---------------|------------------------------------------------------|-----------|---------------------|
+| [exact route from app map] | [which codebase] | High / Medium / Low | [shared navigation, shared data display, shared form, user flow overlap] |
 
-Areas of the App This Likely Affects:
-- [Other screens or features the user might notice changes in]
-- [Related workflows that could behave differently]
-${appMapBlock ? "\n(Reference real app routes below when identifying affected areas)\n" + appMapBlock : ""}
-`;
+Regression Test Scenarios:
+For each High and Medium risk regression area, create concrete user-facing test scenarios:
+| # | Screen / Route | Service | User Action | What User Should See (unchanged) | Type |
+|---|---------------|---------|-------------|----------------------------------|------|
+| 1 | [route from impact areas] | [web-app/core-service/vendor-management] | [navigate to screen, perform action] | [expected unchanged behavior] | Manual / Automatable |
+
+Regression Retest Checklist:
+For each High and Medium risk area above, write a user-facing test step:
+1. [Navigate to screen / Perform user action] → [what user should see unchanged]
+2. ...
+` : ""}
+${appMapBlock}`;
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 3000,
+      max_tokens: 8192,
       system: systemInstruction,
       messages: [{ role: "user", content: prompt }],
     });

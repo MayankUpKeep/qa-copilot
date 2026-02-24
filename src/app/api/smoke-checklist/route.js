@@ -4,8 +4,7 @@ export async function POST(req) {
   try {
     const { story } = await req.json();
 
-    const systemInstruction = `
-You are a Senior QA Engineer preparing a minimal, high-confidence smoke checklist before closing a Jira ticket.
+    const systemInstruction = `You are a Senior QA Engineer preparing a minimal, high-confidence smoke checklist before closing a Jira ticket.
 
 CRITICAL GROUNDING RULES:
 - ONLY include checks that are directly relevant to what the ticket describes.
@@ -22,11 +21,9 @@ CHECKLIST DESIGN RULES:
 PRIORITY CLASSIFICATION:
 - Critical: If this fails, the feature is broken or data is lost. Must pass before closing.
 - High Risk: Likely regression area or edge case that is easy to miss.
-- Quick Negative: Fast checks for invalid/boundary inputs. Only include if the ticket involves user input or form submissions.
-`;
+- Quick Negative: Fast checks for invalid/boundary inputs. Only include if the ticket involves user input or form submissions.`;
 
-    const prompt = `
-From the following Jira ticket, create a prioritized smoke checklist.
+    const prompt = `From the following Jira ticket, create a prioritized smoke checklist.
 
 RULES:
 - Only include checks grounded in the ticket content.
@@ -49,8 +46,7 @@ Quick Negative Checks (only if ticket involves user input/validation):
 
 ---
 Story:
-${story}
-`;
+${story}`;
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,

@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 
-export default function JiraFetch({ onFetched, onPrFetched, colorClass = "blue" }) {
+export default function JiraFetch({ onFetched, onPrFetched, onImagesFetched, colorClass = "blue" }) {
   const [ticketId, setTicketId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [prCount, setPrCount] = useState(null);
+  const [imgCount, setImgCount] = useState(null);
 
   const colorMap = {
     blue: "bg-blue-600 hover:bg-blue-700 focus:ring-blue-500",
@@ -27,6 +28,7 @@ export default function JiraFetch({ onFetched, onPrFetched, colorClass = "blue" 
     setLoading(true);
     setError("");
     setPrCount(null);
+    setImgCount(null);
 
     try {
       const res = await fetch("/api/jira/fetch", {
@@ -46,6 +48,13 @@ export default function JiraFetch({ onFetched, onPrFetched, colorClass = "blue" 
 
       if (onPrFetched && data.prText) {
         onPrFetched(data.prText, data.prDetails);
+      }
+
+      if (onImagesFetched && data.imageAttachments?.length > 0) {
+        onImagesFetched(data.imageAttachments);
+        setImgCount(data.imageAttachments.length);
+      } else {
+        setImgCount(0);
       }
 
       setPrCount(data.prDetails?.length || 0);
@@ -82,6 +91,9 @@ export default function JiraFetch({ onFetched, onPrFetched, colorClass = "blue" 
       </button>
       {prCount !== null && prCount > 0 && (
         <span className="text-green-600 text-xs font-medium">{prCount} PR{prCount > 1 ? "s" : ""} auto-fetched</span>
+      )}
+      {imgCount !== null && imgCount > 0 && (
+        <span className="text-blue-600 text-xs font-medium">{imgCount} image{imgCount > 1 ? "s" : ""} attached</span>
       )}
       {prCount === 0 && prCount !== null && (
         <span className="text-gray-400 text-xs">No linked PRs</span>

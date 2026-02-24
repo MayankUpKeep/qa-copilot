@@ -4,8 +4,7 @@ export async function POST(req) {
   try {
     const { story } = await req.json();
 
-    const systemInstruction = `
-You are a Senior SDET writing production-ready Playwright test skeletons in TypeScript.
+    const systemInstruction = `You are a Senior SDET writing production-ready Playwright test skeletons in TypeScript.
 
 CODE QUALITY RULES:
 - Use @playwright/test imports.
@@ -39,11 +38,9 @@ EDGE CASE HANDLING:
 - If the story mentions file uploads, include file input handling with setInputFiles().
 - If the story mentions tables or lists, include tests for sorting, filtering, and pagination if mentioned.
 
-Return ONLY the test file code. No explanations before or after the code block.
-`;
+Return ONLY the test file code. No explanations before or after the code block.`;
 
-    const prompt = `
-Generate a Playwright test skeleton for this Jira story.
+    const prompt = `Generate a Playwright test skeleton for this Jira story.
 
 RULES:
 - Only create tests for scenarios mentioned in the story.
@@ -54,8 +51,7 @@ RULES:
 - Every test must have at least one expect assertion.
 
 Jira Story:
-${story}
-`;
+${story}`;
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,

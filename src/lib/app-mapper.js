@@ -25,6 +25,41 @@ function listSourceFiles(dir, extensions, baseDir = dir) {
 }
 
 /**
+ * Expand regex-style route params into clean readable routes.
+ * e.g. "/providers/:display(list|network)" → ["/providers/list", "/providers/network"]
+ * e.g. "/:entity(vendors|customers)/:display(list)" → ["/vendors/list", "/customers/list"]
+ * e.g. "/providers/:providerId/:currentTab" → ["/providers/:providerId/:currentTab"]
+ */
+function expandRoute(route) {
+  const paramWithOptions = /:(\w+)\(([^)]+)\)/g;
+  if (!paramWithOptions.test(route)) return [route];
+
+  paramWithOptions.lastIndex = 0;
+  let segments = [route];
+  let match;
+  while ((match = paramWithOptions.exec(route)) !== null) {
+    const fullMatch = match[0];
+    const options = match[2].split("|").map((o) => o.trim());
+    const expanded = [];
+    for (const seg of segments) {
+      for (const opt of options) {
+        expanded.push(seg.replace(fullMatch, opt));
+      }
+    }
+    segments = expanded;
+  }
+  return segments;
+}
+
+/**
+ * Simplify named route params for readability.
+ * e.g. "/providers/:providerId/:currentTab" → "/providers/{providerId}/{currentTab}"
+ */
+function cleanRouteParams(route) {
+  return route.replace(/:([a-zA-Z_]\w*)/g, "{$1}");
+}
+
+/**
  * Extract route paths from React app source.
  * Supports: createBrowserRouter([{ path: "/" }]), <Route path="/x" />, path: "/foo", path: 'bar'
  */
@@ -43,7 +78,20 @@ function extractRoutesFromContent(content, filePath) {
     const p = m[1].trim();
     if (p && p !== "*") routes.add(p.startsWith("/") ? p : "/" + p);
   }
-  return Array.from(routes);
+  // Route constants: ROUTE_NAME: '/path' (common in ROUTES objects)
+  const routeConst = /\w+:\s*["'](\/[a-z0-9/:_-]+)["']/gi;
+  while ((m = routeConst.exec(content)) !== null) {
+    const p = m[1].trim();
+    if (p && p !== "/" && !p.includes("api")) routes.add(p);
+  }
+
+  const expanded = new Set();
+  for (const r of routes) {
+    for (const er of expandRoute(r)) {
+      expanded.add(cleanRouteParams(er));
+    }
+  }
+  return Array.from(expanded);
 }
 
 /**
@@ -87,7 +135,12 @@ function scanWebApp(rootPath) {
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
     return { routes: [], endpoints: [], routeToEndpoints: null, error: "Web app path does not exist or is not a directory." };
   }
-  const files = listSourceFiles(resolved, DEFAULT_WEB_APP_EXTENSIONS);
+  let files = listSourceFiles(resolved, DEFAULT_WEB_APP_EXTENSIONS);
+  // Also scan sibling "shared" directory for route constants and shared types
+  const sharedDir = path.join(resolved, "..", "shared");
+  if (fs.existsSync(sharedDir) && fs.statSync(sharedDir).isDirectory()) {
+    files = files.concat(listSourceFiles(sharedDir, DEFAULT_WEB_APP_EXTENSIONS));
+  }
   const allRoutes = new Set();
   const allEndpoints = new Set();
   const routeToEndpoints = {}; // path -> list of endpoints (best-effort by file)
@@ -153,6 +206,18 @@ function extractEndpointsFromContent(content) {
       const fullPath = controllerPaths[controllerPaths.length - 1] + (subPath.startsWith("/") ? subPath : "/" + subPath);
       endpoints.add(`${method} ${fullPath}`);
     }
+  }
+  // tRPC: procedureName: someProcedure.input(...).query/mutation(...)
+  // Only matches when "Procedure" is in the builder name to avoid false positives in non-tRPC code
+  const trpcProcedure = /(\w+)\s*:\s*\w+Procedure\s*(?:\.input\([^)]*\))?\s*\.(query|mutation)\s*\(/g;
+  while ((m = trpcProcedure.exec(content)) !== null) {
+    endpoints.add(`TRPC.${m[2].toUpperCase()} ${m[1]}`);
+  }
+  // tRPC chained across lines: name: xProcedure\n  .input(...)\n  .query/mutation(
+  const trpcChained = /(\w+)\s*:\s*\w+Procedure[^;]{0,500}?\.(query|mutation)\s*\(/gs;
+  while ((m = trpcChained.exec(content)) !== null) {
+    const key = `TRPC.${m[2].toUpperCase()} ${m[1]}`;
+    if (!endpoints.has(key)) endpoints.add(key);
   }
   return Array.from(endpoints);
 }
@@ -238,6 +303,32 @@ function getAppContext(options = {}) {
   const modules = core.modules || [];
   const routeToEndpoints = web.routeToEndpoints || null;
 
+  // Scan additional services defined via ADDITIONAL_SERVICES env (comma-separated name:path pairs)
+  // e.g. ADDITIONAL_SERVICES=vendor-management:/home/user/repos/vendor-management
+  const additionalServices = [];
+  const additionalRaw = process.env.ADDITIONAL_SERVICES || "";
+  if (additionalRaw.trim()) {
+    for (const entry of additionalRaw.split(",")) {
+      const [name, ...pathParts] = entry.trim().split(":");
+      const svcPath = pathParts.join(":"); // rejoin in case path has colons (e.g. Windows)
+      if (!name || !svcPath) continue;
+
+      const clientDir = path.join(svcPath, "client");
+      const svcWeb = fs.existsSync(clientDir) ? scanWebApp(clientDir) : null;
+      const svcBack = scanCoreService(svcPath);
+
+      additionalServices.push({
+        name: name.trim(),
+        path: svcPath.trim(),
+        routes: svcWeb?.routes || [],
+        webEndpoints: svcWeb?.endpoints || [],
+        coreEndpoints: svcBack.endpoints || [],
+        modules: svcBack.modules || [],
+        error: [svcWeb?.error, svcBack.error].filter(Boolean).join("; ") || undefined,
+      });
+    }
+  }
+
   return {
     webAppPath: webAppPath || undefined,
     coreServicePath: coreServicePath || undefined,
@@ -246,7 +337,8 @@ function getAppContext(options = {}) {
     coreEndpoints,
     modules,
     routeToEndpoints,
-    errors: [web.error, core.error].filter(Boolean),
+    additionalServices,
+    errors: [web.error, core.error, ...additionalServices.map((s) => s.error)].filter(Boolean),
   };
 }
 
@@ -254,7 +346,7 @@ function getAppContext(options = {}) {
  * Format app context into a string block for the regression prompt.
  */
 function formatAppContextForPrompt(appContext) {
-  if (!appContext || (!appContext.routes?.length && !appContext.coreEndpoints?.length && !appContext.webEndpoints?.length)) {
+  if (!appContext || (!appContext.routes?.length && !appContext.coreEndpoints?.length && !appContext.webEndpoints?.length && !appContext.additionalServices?.length)) {
     return "";
   }
   const lines = ["\n--- Application map (use this to ground regression areas; only suggest areas that appear below) ---\n"];
@@ -278,7 +370,38 @@ function formatAppContextForPrompt(appContext) {
   if (appContext.modules?.length) {
     lines.push("Backend modules/areas:");
     lines.push(appContext.modules.map((m) => `- ${m}`).join("\n"));
+    lines.push("");
   }
+
+  for (const svc of appContext.additionalServices || []) {
+    const hasData = svc.routes?.length || svc.webEndpoints?.length || svc.coreEndpoints?.length || svc.modules?.length;
+    if (!hasData) continue;
+
+    lines.push(`\n=== ${svc.name} ===\n`);
+    if (svc.routes?.length) {
+      lines.push(`${svc.name} frontend routes:`);
+      lines.push(svc.routes.map((r) => `- ${r}`).join("\n"));
+      lines.push("");
+    }
+    if (svc.webEndpoints?.length) {
+      lines.push(`${svc.name} API calls from frontend:`);
+      lines.push(svc.webEndpoints.slice(0, 60).map((e) => `- ${e}`).join("\n"));
+      if (svc.webEndpoints.length > 60) lines.push(`... and ${svc.webEndpoints.length - 60} more`);
+      lines.push("");
+    }
+    if (svc.coreEndpoints?.length) {
+      lines.push(`${svc.name} backend endpoints:`);
+      lines.push(svc.coreEndpoints.slice(0, 80).map((e) => `- ${e}`).join("\n"));
+      if (svc.coreEndpoints.length > 80) lines.push(`... and ${svc.coreEndpoints.length - 80} more`);
+      lines.push("");
+    }
+    if (svc.modules?.length) {
+      lines.push(`${svc.name} modules/areas:`);
+      lines.push(svc.modules.map((m) => `- ${m}`).join("\n"));
+      lines.push("");
+    }
+  }
+
   lines.push("\n--- End of application map ---\n");
   return lines.join("\n");
 }

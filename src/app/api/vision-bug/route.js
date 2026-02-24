@@ -1,6 +1,6 @@
 import { anthropic, CLAUDE_MODEL, getTextFromResponse } from "@/lib/anthropic";
 
-export const runtime = "nodejs"; // VERY IMPORTANT
+export const runtime = "nodejs";
 
 export async function POST(req) {
   try {
@@ -12,13 +12,11 @@ export async function POST(req) {
       return Response.json({ output: "No image received." }, { status: 400 });
     }
 
-    // Convert image to base64
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const base64Image = buffer.toString("base64");
 
-    const systemPrompt = `
-You are a Senior Software QA Engineer analyzing screenshots to generate Jira bug reports.
+    const systemPrompt = `You are a Senior Software QA Engineer analyzing screenshots to generate Jira bug reports.
 
 CRITICAL GROUNDING RULES:
 - The tester's written context is the PRIMARY source of truth. The screenshot is supporting evidence.
@@ -72,8 +70,7 @@ Severity:
 (Blocker / Critical / Major / Minor — with 1-line justification)
 
 Notes for Developer:
-(Technical clues visible in screenshot: error messages, console errors, broken elements. If none: "No additional technical indicators visible.")
-`;
+(Technical clues visible in screenshot: error messages, console errors, broken elements. If none: "No additional technical indicators visible.")`;
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
@@ -88,8 +85,7 @@ Notes for Developer:
               text: `Analyze this screenshot and write a bug report.
 
 Tester context:
-${context || "No additional context provided. Base the report on screenshot analysis only and flag that tester should add context."}
-`,
+${context || "No additional context provided. Base the report on screenshot analysis only and flag that tester should add context."}`,
             },
             {
               type: "image",

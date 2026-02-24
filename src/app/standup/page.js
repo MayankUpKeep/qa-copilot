@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import InfoTooltip from "@/components/InfoTooltip";
+import FormattedOutput from "@/components/FormattedOutput";
 
 export default function StandupPage() {
   const [notes, setNotes] = useState("");
@@ -77,9 +78,7 @@ export default function StandupPage() {
           </div>
 
           <div className="p-6 bg-white rounded-lg border border-gray-300">
-            <pre className="whitespace-pre-wrap text-gray-900 text-sm leading-7 font-mono">
-              {result}
-            </pre>
+            <FormattedOutput text={result} />
           </div>
         </div>
       )}

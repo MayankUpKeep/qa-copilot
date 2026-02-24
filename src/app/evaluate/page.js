@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import InfoTooltip from "@/components/InfoTooltip";
 import JiraFetch from "@/components/JiraFetch";
 import GitHubPRFetch from "@/components/GitHubPRFetch";
+import FormattedOutput from "@/components/FormattedOutput";
 
 const LS_KEY = "qa_evaluate";
 
@@ -28,6 +29,7 @@ export default function EvaluatePage() {
   const [loadingB, setLoadingB] = useState(false);
   const [scopeLoading, setScopeLoading] = useState(false);
   const [copiedSection, setCopiedSection] = useState(null);
+  const [ticketLabels, setTicketLabels] = useState([]);
   const [appMapStatus, setAppMapStatus] = useState(null);
 
   useEffect(() => {
@@ -54,7 +56,7 @@ export default function EvaluatePage() {
     const res = await fetch("/api/evaluate/phase1", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ story }),
+      body: JSON.stringify({ story, labels: ticketLabels }),
     });
     const data = await res.json();
     setPlanA(data.output);
@@ -72,7 +74,7 @@ export default function EvaluatePage() {
     const res = await fetch("/api/evaluate/phase2", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ story, prContext }),
+      body: JSON.stringify({ story, prContext, labels: ticketLabels }),
     });
     const data = await res.json();
     setPlanB(data.output);
@@ -123,7 +125,7 @@ export default function EvaluatePage() {
       </p>
 
       <JiraFetch
-        onFetched={(text) => updateStory(text)}
+        onFetched={(text, ticket) => { updateStory(text); if (ticket?.labels) setTicketLabels(ticket.labels); }}
         onPrFetched={(text) => updatePr(text)}
         colorClass="blue"
       />
@@ -258,8 +260,8 @@ export default function EvaluatePage() {
         <div className="mt-4 p-5 bg-emerald-50 rounded-xl border-2 border-emerald-400">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
-              <span className="bg-emerald-600 text-white text-xs font-bold px-2.5 py-1 rounded">SCOPE</span>
-              <h3 className="text-sm font-semibold text-gray-700">Testing Scope</h3>
+              <span className="bg-emerald-600 text-white text-xs font-bold px-2.5 py-1 rounded">SCOPE + ALIGNMENT DIFF</span>
+              <h3 className="text-sm font-semibold text-gray-700">Testing Scope & Plan Alignment</h3>
             </div>
             {scope && (
               <button
@@ -270,11 +272,18 @@ export default function EvaluatePage() {
               </button>
             )}
           </div>
+          {scope && (
+            <div className="flex flex-wrap gap-3 mb-3 text-[11px]">
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-green-100 text-green-800 border-green-300 font-medium">ALIGNED — Covered in both plans</span>
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-amber-100 text-amber-800 border-amber-300 font-medium">PLAN A ONLY — Potential gap (user expects, PR may not cover)</span>
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-blue-100 text-blue-800 border-blue-300 font-medium">PLAN B ONLY — Undocumented change (PR does, ticket didn&apos;t mention)</span>
+            </div>
+          )}
           <div className="p-4 bg-white rounded-lg border border-emerald-300 min-h-[200px]">
             {scopeLoading ? (
-              <div className="text-emerald-500 text-sm animate-pulse">Analyzing both plans and defining complete test scope...</div>
+              <div className="text-emerald-500 text-sm animate-pulse">Analyzing both plans, building alignment diff, and defining complete test scope...</div>
             ) : (
-              <pre className="whitespace-pre-wrap text-gray-900 text-sm leading-7 font-mono">{scope}</pre>
+              <FormattedOutput text={scope} />
             )}
           </div>
         </div>

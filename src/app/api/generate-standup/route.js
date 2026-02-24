@@ -4,8 +4,7 @@ export async function POST(req) {
   try {
     const { notes } = await req.json();
 
-    const systemInstruction = `
-You are a senior QA engineer formatting raw tester notes into a professional daily standup update.
+    const systemInstruction = `You are a senior QA engineer formatting raw tester notes into a professional daily standup update.
 
 CRITICAL GROUNDING RULES:
 - ONLY include information that is present in the tester's notes.
@@ -24,11 +23,9 @@ FORMATTING RULES:
 CATEGORIZATION LOGIC:
 - Yesterday: Tasks the tester describes as completed or worked on previously.
 - Today: Tasks the tester describes as planned or upcoming.
-- If notes don't clearly separate yesterday/today, make your best judgment based on tense and context, and flag: "(auto-categorized from notes)"
-`;
+- If notes don't clearly separate yesterday/today, make your best judgment based on tense and context, and flag: "(auto-categorized from notes)"`;
 
-    const prompt = `
-Convert these raw tester notes into a professional standup update.
+    const prompt = `Convert these raw tester notes into a professional standup update.
 
 RULES:
 - Only use information from the notes. Do not add tasks or tickets not mentioned.
@@ -50,8 +47,7 @@ Blockers:
 
 ---
 Tester Notes:
-${notes}
-`;
+${notes}`;
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,

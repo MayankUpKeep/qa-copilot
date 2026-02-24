@@ -4,8 +4,7 @@ export async function POST(req) {
   try {
     const { title, description } = await req.json();
 
-    const systemInstruction = `
-You are a Senior QA Engineer rewriting poorly written Jira bug reports into clear, structured, reproducible tickets.
+    const systemInstruction = `You are a Senior QA Engineer rewriting poorly written Jira bug reports into clear, structured, reproducible tickets.
 
 CRITICAL GROUNDING RULES:
 - ONLY use information present in the original title and description.
@@ -25,11 +24,9 @@ SEVERITY CLASSIFICATION (apply strictly):
 - Critical: Data loss, security exposure, or payment/billing failure.
 - Major: Feature is unusable but a workaround exists.
 - Minor: Cosmetic, typo, or minor usability issue.
-- If severity cannot be determined from the description, write "To be confirmed by QA" with reasoning.
-`;
+- If severity cannot be determined from the description, write "To be confirmed by QA" with reasoning.`;
 
-    const prompt = `
-Rewrite this poorly written Jira bug into a professional, structured QA bug report.
+    const prompt = `Rewrite this poorly written Jira bug into a professional, structured QA bug report.
 
 Original Title:
 ${title}
@@ -75,8 +72,7 @@ Possible Root Cause:
 (Only if original mentions error codes, logs, or technical details. Otherwise: "Not determinable from report")
 
 Improvement Notes:
-(What was unclear in the original and what you inferred or flagged)
-`;
+(What was unclear in the original and what you inferred or flagged)`;
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,

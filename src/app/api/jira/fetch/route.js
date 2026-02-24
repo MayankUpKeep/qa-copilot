@@ -47,6 +47,35 @@ export async function POST(req) {
       }
     }
 
+    const imageAttachments = [];
+    const imageTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"];
+    for (const att of ticket.attachments || []) {
+      if (imageTypes.includes(att.mimeType) && att.url) {
+        try {
+          const imgRes = await fetch(att.url, {
+            headers: {
+              Authorization:
+                "Basic " +
+                Buffer.from(
+                  `${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`
+                ).toString("base64"),
+            },
+          });
+          if (imgRes.ok) {
+            const buf = Buffer.from(await imgRes.arrayBuffer());
+            imageAttachments.push({
+              name: att.filename,
+              mimeType: att.mimeType,
+              dataUrl: `data:${att.mimeType};base64,${buf.toString("base64")}`,
+            });
+          }
+        } catch {
+          // Skip images that fail to download
+        }
+        if (imageAttachments.length >= 6) break;
+      }
+    }
+
     const ticketText = formatTicketText(ticket);
     const prText = formatPrText(prDetails);
     const formattedText = [ticketText, prText].filter(Boolean).join("\n\n");
@@ -58,6 +87,7 @@ export async function POST(req) {
       ticketText,
       prText,
       formattedText,
+      imageAttachments,
     });
   } catch (err) {
     console.error("Jira fetch error:", err);
