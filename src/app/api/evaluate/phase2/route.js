@@ -63,6 +63,22 @@ ROLE-BASED TESTING:
 - Permission levels: Full, Partial (creator/assignee only), None.
 - Limited Technician: affiliation-based filtering only. Requester/Operator: own requests only.
 
+SCENARIO WRITING RULES:
+- The "Variable Under Test" column describes WHAT is being tested — the specific endpoint behavior, data contract, component interaction — NOT the step.
+  BAD: "Send POST request to /api/providers" (that is a step)
+  GOOD: "Provider creation API validates required fields" (names the variable under test)
+- The "Expected Proof" column is the technical evidence: HTTP status code, response payload shape, UI state change, network tab response.
+- Do NOT repeat the scenario in the expected proof — they must be distinct.
+
+ROLE ASSIGNMENT IN SCENARIOS:
+- The Role column accepts: a specific role name, OR "Both" (meaning Admin + Limited Admin), OR "All".
+- If a test applies identically to Admin and Limited Admin, use "Both" — do NOT create duplicate rows.
+- Only create separate rows when expected technical behavior DIFFERS between roles (different status codes, different response payloads, different access levels).
+
+AUTOMATION CLASSIFICATION (two-pass):
+- First generate all scenarios with Type as "TBD", then classify each as "Automatable" (standard UI interactions, API calls, element checks testable with Playwright) or "Manual" (visual judgment, complex subjective validation, drag-and-drop, cross-device).
+- After all scenario tables, add an Automation Assessment summary.
+
 QUALITY:
 - Each scenario must reference the PR change or ticket requirement it validates.
 - Output must be directly pasteable into Jira. Use bullets and tables, no filler.
@@ -140,35 +156,40 @@ Role Access Matrix (for this ticket's affected endpoints — only include roles 
 (C) If Cross-System: list both standard + vendor portal role rows.
 
 Positive Test Scenarios:
-| # | Role | Scenario | Expected Technical Outcome | Test Type | Source | Type |
-|---|------|----------|---------------------------|-----------|--------|------|
-| 1 | Admin | [specific happy-path test] | [HTTP code, UI state, response] | API/UI/Data | Ticket/PR/Both | Manual/Automatable |
-| 2 | Limited Admin | [same or similar test] | [HTTP code, UI state, response] | API/UI/Data | Ticket/PR/Both | Manual/Automatable |
+| # | Role | Variable Under Test | Dependent Variables / Controls | Expected Proof | Test Type | Source | Type |
+|---|------|--------------------|-----------------------------|----------------|-----------|--------|------|
+| 1 | Both | [what is being tested — endpoint behavior, data contract, component interaction] | [related fields, settings, auth state] | [specific technical proof: HTTP status, response payload, UI state] | API/UI/Data | Ticket/PR/Both | Manual / Automatable |
 
 Negative Test Scenarios:
-| # | Role | Scenario | Invalid Input / Condition | Expected Error Behavior | Test Type | Source | Type |
-|---|------|----------|--------------------------|------------------------|-----------|--------|------|
-| 1 | Admin | [invalid payload, missing field, boundary value] | [what goes wrong] | [error code, validation message] | API/UI/Error/Boundary | Ticket/PR/Both | Manual/Automatable |
+| # | Role | Variable Under Test | Invalid Condition | Expected Proof (error behavior) | Test Type | Source | Type |
+|---|------|--------------------|--------------------|-------------------------------|-----------|--------|------|
+| 1 | Both | [what is being tested negatively] | [invalid payload, missing field, boundary] | [specific error code, validation message, blocked action] | API/UI/Error/Boundary | Ticket/PR/Both | Manual / Automatable |
 
 Race Condition Scenarios (only if PR involves concurrency):
 | # | Conflicting Actions | Timing | Expected Behavior | Type |
 |---|---------------------|--------|-------------------|------|
+
+Automation Assessment:
+- Total scenarios: [count]
+- Automatable: [count] — [what can be automated and why]
+- Manual: [count] — [what stays manual and why]
+- Recommended automation priority: [which scenarios to automate first]
 ${appMapBlock ? `
 Regression Impact Areas:
-Use the ticket labels to identify which codebases are changed. Scan the application map for routes, endpoints, and modules that share data, state, API contracts, DB tables, or UI components with the PR's changes. List every match:
-| Route / Endpoint / Module | Service (web-app / core-service / vendor-management) | Risk Level | Connection to PR Changes |
-|---------------------------|------------------------------------------------------|-----------|-------------------------|
-| [exact path from app map] | [which codebase] | High / Medium / Low | [shared API, shared module, shared DB table, shared state, UI dependency, tRPC procedure] |
+Go ELEMENT-LEVEL: list the specific API fields, UI components, filters, data columns, and parameters that reference or consume the same data the PR modifies. Not just routes — specific elements.
+| Element / Field / Parameter | Location (route or endpoint) | Service | Risk Level | Why It Could Break |
+|-----------------------------|-------------------------------|---------|-----------|-------------------|
+| [specific element: e.g. "provider_id field in GET /api/work-orders response"] | [endpoint or route] | [web-app / core-service / vendor-management] | High / Medium / Low | [shares same data source, same API field, same DB table, same tRPC procedure] |
 
 Regression Test Scenarios:
-For each High and Medium risk regression area, create concrete test scenarios:
-| # | Route / Endpoint | Service | Scenario | Expected Technical Outcome | Type |
-|---|-----------------|---------|----------|---------------------------|------|
-| 1 | [path from impact areas] | [web-app/core-service/vendor-management] | [specific action to verify no regression] | [expected unchanged response/behavior] | Manual / Automatable |
+For each High and Medium risk element, create a test scenario following SCENARIO WRITING RULES:
+| # | Element Under Test | Service | Variable Under Test | Expected Proof (unchanged behavior) | Type |
+|---|-------------------|---------|--------------------|------------------------------------|------|
+| 1 | [specific element from impact areas] | [service] | [what aspect is being verified technically] | [specific proof: unchanged HTTP response, same UI state, correct data] | Manual / Automatable |
 
 Regression Retest Checklist:
-For each High and Medium risk area above, write a concrete test step:
-1. [Navigate to route / Call endpoint / Verify module behavior] → [expected behavior should be unchanged]
+For each High and Medium risk element above, write a concrete verification step:
+1. [Call endpoint / Navigate to route, check specific element] → [expected unchanged behavior with proof]
 2. ...
 ` : ""}
 

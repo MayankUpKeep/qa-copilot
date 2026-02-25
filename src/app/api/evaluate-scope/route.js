@@ -1,96 +1,150 @@
 import { anthropic, CLAUDE_MODEL, getTextFromResponse } from "@/lib/anthropic";
+import { getAppContext, formatAppContextForPrompt } from "@/lib/app-mapper";
 
 export async function POST(req) {
   try {
-    const { story, planA, planB } = await req.json();
+    const { story, planA, planB, labels = [] } = await req.json();
 
-    const systemInstruction = `
-You are a Senior QA Engineer writing the DEFINITIVE TESTING SCOPE for a Jira ticket.
+    const appContext = getAppContext({});
+    const appMapBlock = appContext ? formatAppContextForPrompt(appContext) : "";
 
-You have two inputs:
-1. Plan A (User Perspective) — written from an end-user's point of view. Covers user journeys, UX flows, edge cases users would hit, and areas of the app affected from a user standpoint.
-2. Plan B (Technical Perspective) — written from a code/PR analysis standpoint. Covers API behavior, data flow, error handling, boundary conditions, regression from actual code changes.
+    const systemInstruction = `PURPOSE: You are a Senior QA Engineer producing the REFINED TEST PLAN by merging two independent test plans into one superior plan.
 
-YOUR JOB:
-1. First, produce an ALIGNMENT DIFF that categorizes every test item from both plans.
-2. Then, produce the unified TESTING SCOPE.
+You have:
+1. Plan A (User Perspective) — user journeys, UX flows, edge cases a real user would hit.
+2. Plan B (Technical Perspective) — PR/code analysis: API behavior, data flow, error handling, boundary conditions, regression from actual changes.
 
-ALIGNMENT RULES:
-- Go through every test scenario / scope item in Plan A and Plan B.
-- Categorize each as:
-  [ALIGNED] — The item appears in BOTH plans (same feature/behavior described from user vs technical perspective). Merge into one description.
-  [PLAN A ONLY] — The item appears ONLY in Plan A (user perspective). The PR does not appear to cover it. This is a POTENTIAL GAP — the user expects it but it may not be implemented.
-  [PLAN B ONLY] — The item appears ONLY in Plan B (technical changes). The ticket/user story did not anticipate this change. This is an UNDOCUMENTED CHANGE — the PR does something the ticket didn't ask for.
-- Be thorough: every significant test item from both plans must appear in exactly one category.
-- Use your judgment to match items — Plan A says "user can search providers" and Plan B says "GET /api/providers/search endpoint returns results" are the SAME item (ALIGNED).
+YOUR GOAL: Merge the best of both into a single refined test plan that is more complete than either plan alone. Focus on TESTING SCOPE (what to test) and TESTING APPROACH (how to test it). The regression section must be THOROUGH — err on the side of including more regression cases rather than fewer.
 
 MERGE RULES:
-- Combine user-facing tests from Plan A with technical tests from Plan B into one coherent scope.
-- Do NOT duplicate — if both plans describe the same behavior, merge into ONE scope item.
-- Keep the user perspective for functional tests (what the user does and sees).
-- Keep the technical perspective for API, regression, and boundary tests.
-- Every scope item must be a concrete, executable test — not a vague description.
+- If both plans test the same behavior, merge into ONE item keeping the best description.
+- If Plan A has a user scenario that Plan B missed, include it.
+- If Plan B has a technical scenario that Plan A missed, include it.
+- The merged plan should cover MORE than either individual plan.
+- Every item must be concrete and executable — not vague.
+
+SCENARIO WRITING RULES:
+- "Variable Under Test" describes WHAT is under test — the feature, behavior, or interaction being validated — NOT the action or step.
+  BAD: "Navigate to Provider Network page and perform search" (that is a step)
+  GOOD: "Provider search results display as tile cards after query" (names the variable)
+- "Expected Proof" is the observable evidence that the variable behaved correctly. Must be specific and verifiable.
+  BAD: "Page loads correctly" (vague)
+  GOOD: "Search results render as tile cards with provider name, rating, and response time visible" (specific)
+- Do NOT repeat the scenario in the expected proof — they must be distinct.
+
+ROLE ASSIGNMENT:
+- The Role column accepts: a specific role name, "Both" (Admin + Limited Admin), or "All" (all selected roles).
+- Use "Both" if Admin and Limited Admin behave identically — no duplicate rows.
+- Only create separate role rows when expected behavior DIFFERS between roles.
+
+ROLE SELECTION (use TICKET LABELS as primary signal):
+- Standard roles (web-app + core-service): Admin (1), Limited Admin (7), Technician (2), Limited Technician (5), View Only (3), Requester (4), Operator (8).
+- Vendor portal roles (vendor-management): Vendor (6), Contractor (101), Provider Admin, Provider Tech.
+- VENDOR PORTAL ONLY (labels: vendor-management/vendor-portal/provider-network) → Vendor, Contractor, Provider Admin, Provider Tech ONLY.
+- WEB-APP / CORE-SERVICE ONLY → Admin, Limited Admin always; add others only if ticket mentions them.
+- CROSS-SYSTEM (both vendor + core/web labels) → both standard + vendor roles.
+
+REGRESSION — BE THOROUGH:
+- This is the most important section. When two plans are merged, regression coverage must EXPAND, not shrink.
+- Use the application map to find EVERY route, endpoint, and module that shares data, state, APIs, or components with the changed feature.
+- Go ELEMENT-LEVEL: list specific UI elements (fields, filters, dropdowns, list columns, cards, modals, form inputs) and API parameters — not just routes.
+- Include regression for ALL affected codebases (web-app, core-service, vendor-management).
+- For each regression item, create a concrete test scenario with expected proof.
+- When in doubt, INCLUDE the regression case. More coverage is better than missed regression.
+- If no app map is available, still derive regression areas from what both plans mention.
+
+AUTOMATION CLASSIFICATION:
+- Classify each scenario as "Automatable" (Playwright/JS: standard UI interactions, API calls, element checks) or "Manual" (visual judgment, complex multi-step, drag-and-drop).
 
 QUALITY:
-- Be concise. Each item is one line describing what to test and the pass criteria.
-- Do NOT mention internal reasoning, alignment logic, or how you matched items.
 - Output must be directly pasteable into Jira.
-`;
+- MANDATORY: Include ALL regression sections if the application map is provided.
+- NEVER mention labels, classification steps, or internal reasoning in the output.`;
 
-    const prompt = `
-Create the alignment diff and definitive testing scope for this ticket.
+    const labelsBlock = labels.length > 0 ? `\nTICKET LABELS: ${labels.join(", ")}\n` : "";
+
+    const prompt = `Merge these two test plans into one refined test plan.
 
 TICKET:
 ${story}
-
+${labelsBlock}
 --- PLAN A (User Perspective) ---
 ${planA}
 
 --- PLAN B (Technical Analysis) ---
 ${planB}
 
-FORMATTING: Use bullet points and numbered lists. Do NOT use markdown tables. Output must be directly pasteable into Jira.
-
 Output EXACTLY in this structure:
 
 Scope Summary:
-(2-3 sentences: what this ticket delivers and the total testing scope — functional + technical + regression.)
-
-Alignment Diff:
-
-Aligned (covered in both plans):
-- [ALIGNED] [specific test area] — Plan A: [user-facing description] | Plan B: [technical description]
-- [ALIGNED] ...
-
-Plan A Only (potential gaps — user expects but PR may not cover):
-- [PLAN A ONLY] [specific test area] — [what the user expects to test that has no matching PR evidence]
-- [PLAN A ONLY] ...
-(Write "None — all user expectations are covered by the PR." if empty)
-
-Plan B Only (undocumented changes — PR does something ticket didn't mention):
-- [PLAN B ONLY] [specific test area] — [what the PR changes that the ticket didn't ask for]
-- [PLAN B ONLY] ...
-(Write "None — all PR changes trace back to ticket requirements." if empty)
+(2-3 sentences: what this ticket delivers and the total testing scope after merging both plans.)
 
 Testing Scope:
-1. [Priority: Critical/High/Medium/Low] [Type: Functional/Technical/Regression/Edge Case] — [specific, executable test] → Pass: [observable pass condition]
-2. ...
+- What specific features and requirements will be tested (merged from both plans)?
+- One bullet per testable feature or requirement — no duplicates.
 
-Regression Scope:
-1. [Area: route / endpoint / module] — [what to verify] → Pass: [expected behavior]
-2. ...
+Testing Approach:
+- Which tests will be covered by exploratory testing, manual test cases, or automation?
+- What prioritization and retesting strategy will be used?
+- What are the test suspension criteria (e.g., max defect threshold to pause testing)?
+- Who on the team should cover which areas?
 
+Role Access Matrix:
+| Role | Expected Access | Key Behavior |
+|------|----------------|-------------|
+
+Positive Test Scenarios (merged & refined — take the best from both plans):
+| # | Role | Variable Under Test | Dependent Variables / Controls | Expected Proof | Type |
+|---|------|--------------------|-----------------------------|----------------|------|
+| 1 | Both | [what is being tested] | [conditions affecting outcome] | [specific observable proof] | Manual / Automatable |
+
+Negative Test Scenarios (merged — include negatives from both plans):
+| # | Role | Variable Under Test | Invalid Condition | Expected Proof (error behavior) | Type |
+|---|------|--------------------|--------------------|-------------------------------|------|
+| 1 | Both | [what is being tested negatively] | [invalid input/state/access] | [specific error/validation observed] | Manual / Automatable |
+
+Automation Assessment:
+- Total scenarios: [count]
+- Automatable: [count] — [what can be automated and why]
+- Manual: [count] — [what stays manual and why]
+- Recommended automation priority: [which to automate first]
+${appMapBlock ? `
+Regression Impact Areas (BE THOROUGH — list every element that could be affected):
+Go element-level across all three codebases. List every UI element, filter, field, API parameter that references or consumes the same data the ticket modifies.
+| Element / Field / Filter | Location (route or endpoint) | Service | Risk Level | Why It Could Break |
+|--------------------------|-------------------------------|---------|-----------|-------------------|
+| [specific element] | [path] | [web-app/core-service/vendor-management] | High/Medium/Low | [shared data, API, component, filter logic] |
+(Include at least 8-12 regression elements. Be exhaustive.)
+
+Regression Test Scenarios (create a test for EVERY High and Medium risk element):
+| # | Element Under Test | Service | Variable Under Test | Expected Proof (unchanged behavior) | Type |
+|---|-------------------|---------|--------------------|------------------------------------|------|
+| 1 | [element from impact areas] | [service] | [what is being verified] | [proof it still works] | Manual / Automatable |
+(Be thorough — one scenario per high/medium risk element minimum.)
+
+Regression Retest Checklist (step-by-step verification):
+1. [Go to specific screen, locate specific element] → [expected unchanged behavior]
+2. ...
+(Cover every high and medium risk element. Aim for 10+ items.)
+` : `
+Regression Areas (derive from both plans):
+- List every area mentioned by either plan that could regress.
+- For each: what to verify and expected unchanged behavior.
+1. [Area] — [what to verify] → Pass: [expected behavior]
+2. ...
+(Be thorough — include everything both plans flagged.)
+`}
 Test Execution Order:
-1. [First — most critical functional test]
-2. [Second — core regression check]
-3. [Third — next priority]
+1. [Most critical functional test from merged plan]
+2. [Core regression check]
+3. [Next priority]
 4. ...
-(Top 5-7 items in recommended execution order)
-`;
+(Top 8-10 items in recommended execution order — prioritize regression higher than usual.)
+${appMapBlock}`;
 
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 6000,
+      max_tokens: 8192,
       system: systemInstruction,
       messages: [{ role: "user", content: prompt }],
     });
@@ -98,6 +152,6 @@ Test Execution Order:
     return Response.json({ output: getTextFromResponse(response) });
   } catch (err) {
     console.error(err);
-    return Response.json({ output: "Error generating scope." });
+    return Response.json({ output: "Error generating refined test plan." });
   }
 }

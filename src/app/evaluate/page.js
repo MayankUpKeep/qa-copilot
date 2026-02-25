@@ -25,9 +25,11 @@ export default function EvaluatePage() {
   const [planA, setPlanA] = useState("");
   const [planB, setPlanB] = useState("");
   const [scope, setScope] = useState("");
+  const [diff, setDiff] = useState("");
   const [loadingA, setLoadingA] = useState(false);
   const [loadingB, setLoadingB] = useState(false);
   const [scopeLoading, setScopeLoading] = useState(false);
+  const [diffLoading, setDiffLoading] = useState(false);
   const [copiedSection, setCopiedSection] = useState(null);
   const [ticketLabels, setTicketLabels] = useState([]);
   const [appMapStatus, setAppMapStatus] = useState(null);
@@ -39,6 +41,7 @@ export default function EvaluatePage() {
     if (saved.planA) setPlanA(saved.planA);
     if (saved.planB) setPlanB(saved.planB);
     if (saved.scope) setScope(saved.scope);
+    if (saved.diff) setDiff(saved.diff);
 
     fetch("/api/app-map")
       .then((r) => r.json())
@@ -91,7 +94,7 @@ export default function EvaluatePage() {
       const res = await fetch("/api/evaluate-scope", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ story, planA, planB }),
+        body: JSON.stringify({ story, planA, planB, labels: ticketLabels }),
       });
       const data = await res.json();
       setScope(data.output);
@@ -102,6 +105,26 @@ export default function EvaluatePage() {
     setScopeLoading(false);
   };
 
+  const showDiff = async () => {
+    if (!planA || !planB) return;
+    setDiffLoading(true);
+    setDiff("");
+
+    try {
+      const res = await fetch("/api/evaluate/diff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ story, planA, planB }),
+      });
+      const data = await res.json();
+      setDiff(data.output);
+      persist({ diff: data.output });
+    } catch {
+      setDiff("Error generating diff.");
+    }
+    setDiffLoading(false);
+  };
+
   const copyText = async (text, key) => {
     if (!text) return;
     await navigator.clipboard.writeText(text);
@@ -109,8 +132,32 @@ export default function EvaluatePage() {
     setTimeout(() => setCopiedSection(null), 2000);
   };
 
+  const stripMarkdown = (text) => {
+    if (!text) return "";
+    return text
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/\*(.*?)\*/g, "$1")
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/^\|[\s\-:|]+\|$/gm, "")
+      .replace(/^\|(.+)\|$/gm, (_, row) =>
+        row.split("|").map((c) => c.trim()).filter(Boolean).join("  |  ")
+      )
+      .replace(/\[ALIGNED\]/g, "[ALIGNED]")
+      .replace(/\[PLAN A ONLY\]/g, "[PLAN A ONLY]")
+      .replace(/\[PLAN B ONLY\]/g, "[PLAN B ONLY]")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  };
+
+  const copyAsPlainText = async (text, key) => {
+    if (!text) return;
+    await navigator.clipboard.writeText(stripMarkdown(text));
+    setCopiedSection(key);
+    setTimeout(() => setCopiedSection(null), 2000);
+  };
+
   const clearAll = () => {
-    setStory(""); setPrContext(""); setPlanA(""); setPlanB(""); setScope("");
+    setStory(""); setPrContext(""); setPlanA(""); setPlanB(""); setScope(""); setDiff("");
     localStorage.removeItem(LS_KEY);
   };
 
@@ -231,13 +278,20 @@ export default function EvaluatePage() {
       </div>
 
       {/* ── DEFINE SCOPE ── */}
-      <div className="mb-4 flex gap-3 items-center">
+      <div className="mb-4 flex flex-wrap gap-3 items-center">
         <button
           onClick={defineScope}
           disabled={scopeLoading || !planA || !planB}
           className="bg-emerald-600 text-white px-6 py-3 rounded-lg hover:bg-emerald-700 transition-colors font-medium disabled:opacity-50"
         >
           {scopeLoading ? "Defining scope..." : "Define Complete Scope"}
+        </button>
+        <button
+          onClick={showDiff}
+          disabled={diffLoading || !planA || !planB}
+          className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:opacity-50"
+        >
+          {diffLoading ? "Comparing..." : "Show Diff"}
         </button>
         <button
           onClick={clearAll}
@@ -256,32 +310,74 @@ export default function EvaluatePage() {
         )}
       </div>
 
+      {(diff || diffLoading) && (
+        <div className="mt-4 mb-6 p-5 bg-purple-50 rounded-xl border-2 border-purple-400">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <span className="bg-purple-600 text-white text-xs font-bold px-2.5 py-1 rounded">DIFF</span>
+              <h3 className="text-sm font-semibold text-gray-700">Plan A vs Plan B — Alignment Diff</h3>
+            </div>
+            {diff && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => copyText(diff, "diff")}
+                  className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
+                >
+                  {copiedSection === "diff" ? "Copied!" : "Copy Markdown"}
+                </button>
+                <button
+                  onClick={() => copyAsPlainText(diff, "diffPlain")}
+                  className="bg-gray-600 text-white px-3 py-1 rounded text-xs hover:bg-gray-700"
+                >
+                  {copiedSection === "diffPlain" ? "Copied!" : "Copy as Text"}
+                </button>
+              </div>
+            )}
+          </div>
+          {diff && (
+            <div className="flex flex-wrap gap-3 mb-3 text-[11px]">
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-green-100 text-green-800 border-green-300 font-medium">ALIGNED — Same coverage in both</span>
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-amber-100 text-amber-800 border-amber-300 font-medium">PLAN A ONLY — Potential gap</span>
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-blue-100 text-blue-800 border-blue-300 font-medium">PLAN B ONLY — Undocumented change</span>
+            </div>
+          )}
+          <div className="p-4 bg-white rounded-lg border border-purple-300 min-h-[200px]">
+            {diffLoading ? (
+              <div className="text-purple-500 text-sm animate-pulse">Comparing Plan A and Plan B line by line...</div>
+            ) : (
+              <FormattedOutput text={diff} />
+            )}
+          </div>
+        </div>
+      )}
+
       {(scope || scopeLoading) && (
         <div className="mt-4 p-5 bg-emerald-50 rounded-xl border-2 border-emerald-400">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
-              <span className="bg-emerald-600 text-white text-xs font-bold px-2.5 py-1 rounded">SCOPE + ALIGNMENT DIFF</span>
-              <h3 className="text-sm font-semibold text-gray-700">Testing Scope & Plan Alignment</h3>
+              <span className="bg-emerald-600 text-white text-xs font-bold px-2.5 py-1 rounded">REFINED PLAN</span>
+              <h3 className="text-sm font-semibold text-gray-700">Refined Test Plan</h3>
             </div>
             {scope && (
-              <button
-                onClick={() => copyText(scope, "scope")}
-                className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
-              >
-                {copiedSection === "scope" ? "Copied!" : "Copy Scope"}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => copyText(scope, "scope")}
+                  className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
+                >
+                  {copiedSection === "scope" ? "Copied!" : "Copy Markdown"}
+                </button>
+                <button
+                  onClick={() => copyAsPlainText(scope, "scopePlain")}
+                  className="bg-gray-600 text-white px-3 py-1 rounded text-xs hover:bg-gray-700"
+                >
+                  {copiedSection === "scopePlain" ? "Copied!" : "Copy as Text"}
+                </button>
+              </div>
             )}
           </div>
-          {scope && (
-            <div className="flex flex-wrap gap-3 mb-3 text-[11px]">
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-green-100 text-green-800 border-green-300 font-medium">ALIGNED — Covered in both plans</span>
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-amber-100 text-amber-800 border-amber-300 font-medium">PLAN A ONLY — Potential gap (user expects, PR may not cover)</span>
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-blue-100 text-blue-800 border-blue-300 font-medium">PLAN B ONLY — Undocumented change (PR does, ticket didn&apos;t mention)</span>
-            </div>
-          )}
           <div className="p-4 bg-white rounded-lg border border-emerald-300 min-h-[200px]">
             {scopeLoading ? (
-              <div className="text-emerald-500 text-sm animate-pulse">Analyzing both plans, building alignment diff, and defining complete test scope...</div>
+              <div className="text-emerald-500 text-sm animate-pulse">Merging both plans into a refined test plan with thorough regression...</div>
             ) : (
               <FormattedOutput text={scope} />
             )}

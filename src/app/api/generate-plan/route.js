@@ -71,6 +71,28 @@ ROLE-BASED TESTING:
 - Limited Technician: affiliation-based filtering (only sees WOs assigned to them, created by them, or via team).
 - Requester/Operator: only see their own requests.
 
+SCENARIO WRITING RULES:
+- The "Scenario" column describes WHAT is under test (the variable, interaction, or condition being validated) — NOT the action or step to perform. Think like a scientific experiment: name the variable.
+  BAD: "Navigate to Provider Network page and perform search" (that is a step, not a scenario)
+  GOOD: "Provider search results display as tile cards after query" (names the variable under test)
+  GOOD: "Tile card click navigates to provider detail page" (variable = click-to-navigate behavior)
+- The "Expected Result" column is the PROOF that acting on the variable produced the correct outcome. It must be observable and verifiable.
+  BAD: "Page loads correctly" (vague, not proof)
+  GOOD: "Search results render as tile cards with provider name, rating, and response time visible" (specific observable proof)
+- Do NOT repeat the scenario in the expected result — they must be distinct.
+
+ROLE ASSIGNMENT IN SCENARIOS:
+- The Role column accepts: a specific role name, OR "Both" (meaning Admin + Limited Admin), OR "All" (meaning all selected roles).
+- If a test scenario applies identically to Admin and Limited Admin with the same expected behavior, use "Both" — do NOT create duplicate rows.
+- Only create separate rows per role when the expected behavior DIFFERS between roles (e.g., Admin sees all records, Limited Admin sees filtered records).
+
+AUTOMATION CLASSIFICATION (two-pass):
+- First, generate all test scenarios with the Type column set to "TBD".
+- Then, review each scenario and classify it as:
+  * "Automatable" — if it can be reliably automated with Playwright/JavaScript (standard UI interactions, form submissions, API calls, navigation, element visibility checks).
+  * "Manual" — if it requires visual judgment, complex multi-step user flows with subjective validation, drag-and-drop, file uploads with visual verification, or cross-device testing.
+- In the final output, replace "TBD" with the classification. After all scenario tables, add an "Automation Assessment" section summarizing the split.
+
 QUALITY:
 - Output must be directly pasteable into Jira fields. Use bullets and tables, no paragraphs or filler.
 - MANDATORY: If the application map is provided, you MUST include the "Regression Impact Areas" and "Regression Retest Checklist" sections. Never skip them.
@@ -145,35 +167,40 @@ Role Access Matrix (for this ticket's feature — only include roles selected in
 (C) If Cross-System: list both standard + vendor portal role rows.
 
 Positive Test Scenarios:
-| # | Role | Scenario | Expected Result | Type |
-|---|------|----------|-----------------|------|
-| 1 | Admin | [specific user action — happy path] | [observable outcome] | Manual / Automatable |
-| 2 | Limited Admin | [same or similar action] | [observable outcome] | Manual / Automatable |
+| # | Role | Variable Under Test | Dependent Variables / Controls | Expected Proof | Type |
+|---|------|--------------------|-----------------------------|----------------|------|
+| 1 | Both | [what is being tested — the feature, behavior, or interaction] | [other fields, settings, or conditions that affect the outcome] | [specific observable proof that the variable behaved correctly] | Manual / Automatable |
 
 Negative Test Scenarios:
-| # | Role | Scenario | Invalid Input / Condition | Expected Error Behavior | Type |
-|---|------|----------|--------------------------|------------------------|------|
-| 1 | Admin | [invalid input, missing field, boundary value] | [what the user does wrong] | [error message, validation, blocked action] | Manual / Automatable |
+| # | Role | Variable Under Test | Invalid Condition | Expected Proof (error behavior) | Type |
+|---|------|--------------------|--------------------|-------------------------------|------|
+| 1 | Both | [what is being tested negatively] | [invalid input, missing field, boundary, unauthorized] | [specific error message, validation state, or blocked action observed] | Manual / Automatable |
 
 Race Condition Scenarios (only if ticket involves concurrency):
 | # | Conflicting Actions | Timing | Expected Behavior | Type |
 |---|---------------------|--------|-------------------|------|
+
+Automation Assessment:
+- Total scenarios: [count]
+- Automatable: [count] — [brief list of what can be automated and why (e.g., "standard form validation, API response checks, element visibility")]
+- Manual: [count] — [brief list of what stays manual and why (e.g., "visual layout comparison, drag-and-drop reordering, cross-browser rendering")]
+- Recommended automation priority: [which scenarios to automate first and why]
 ${appMapBlock ? `
 Regression Impact Areas:
-Use the ticket labels to identify which codebases are changed. Scan the application map for routes, endpoints, and modules that share data, state, UI components, or workflows with the ticket's feature. List every match:
-| Area (route / endpoint / module) | Service (web-app / core-service / vendor-management) | Risk Level | Connection to Ticket |
-|----------------------------------|------------------------------------------------------|-----------|---------------------|
-| [exact path from app map] | [which codebase] | High / Medium / Low | [shared state, shared API, same module, data dependency, UI overlap] |
+Use the ticket labels to identify which codebases are changed. Go ELEMENT-LEVEL: do not just list routes — list the specific UI elements (fields, filters, dropdowns, list columns, cards, modals, form inputs) and API parameters that reference or consume the same data the ticket's feature modifies. For example, if "provider search" changes, list every field, filter, and list view in the app that displays or filters by provider data.
+| Element / Field / Filter | Location (route or endpoint) | Service | Risk Level | Why It Could Break |
+|--------------------------|-------------------------------|---------|-----------|-------------------|
+| [specific UI element: e.g. "Provider name column in /vendors/list"] | [route or endpoint path] | [web-app / core-service / vendor-management] | High / Medium / Low | [shares same data source, same API field, same component, same filter logic] |
 
 Regression Test Scenarios:
-For each High and Medium risk regression area, create concrete test scenarios:
-| # | Area | Service | Scenario | Expected Result | Type |
-|---|------|---------|----------|-----------------|------|
-| 1 | [route/endpoint from impact areas] | [web-app/core-service/vendor-management] | [specific action to verify no regression] | [expected unchanged behavior] | Manual / Automatable |
+For each High and Medium risk regression element, create a test scenario following the SCENARIO WRITING RULES:
+| # | Element Under Test | Service | Variable Under Test | Expected Proof (unchanged behavior) | Type |
+|---|-------------------|---------|--------------------|------------------------------------|------|
+| 1 | [specific element from impact areas] | [web-app/core-service/vendor-management] | [what aspect of this element is being verified] | [specific proof that this element still works correctly] | Manual / Automatable |
 
 Regression Retest Checklist:
-For each High and Medium risk area above, write a concrete test step:
-1. [Navigate to route / Call endpoint] → [expected behavior should be unchanged]
+For each High and Medium risk element above, write a concrete verification step:
+1. [Go to specific screen, locate specific element] → [expected unchanged behavior with proof]
 2. ...
 ` : ""}
 ${appMapBlock}`;

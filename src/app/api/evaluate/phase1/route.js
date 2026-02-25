@@ -58,6 +58,24 @@ ROLE-BASED TESTING:
 - Permission levels: Full, Partial (creator/assignee only), None.
 - Limited Technician: affiliation-based (only sees WOs assigned/created/team). Requester/Operator: own requests only.
 
+SCENARIO WRITING RULES:
+- The "Scenario" / "Variable Under Test" column describes WHAT is being tested — the feature, behavior, or interaction — NOT the step to perform.
+  BAD: "Navigate to Provider Network page" (that is a step)
+  GOOD: "Provider search results display as tile cards" (names the variable under test)
+- The "Expected Proof" column is the observable evidence that the variable behaved correctly. It must be specific.
+  BAD: "Page loads correctly" (vague)
+  GOOD: "Tile cards show provider name, rating, and response time" (specific observable proof)
+- Do NOT repeat the scenario in the expected proof — they must be distinct.
+
+ROLE ASSIGNMENT IN SCENARIOS:
+- The Role column accepts: a specific role name, OR "Both" (meaning Admin + Limited Admin), OR "All" (meaning all selected roles).
+- If a test applies identically to Admin and Limited Admin, use "Both" — do NOT create duplicate rows.
+- Only create separate rows when expected behavior DIFFERS between roles.
+
+AUTOMATION CLASSIFICATION (two-pass):
+- First generate all scenarios with Type as "TBD", then classify each as "Automatable" (standard UI interactions testable with Playwright) or "Manual" (visual judgment, complex subjective validation, drag-and-drop, cross-device).
+- After all scenario tables, add an Automation Assessment summary.
+
 QUALITY:
 - Output must be directly pasteable into Jira. Use bullets and tables, no paragraphs or filler.
 - MANDATORY: If the application map is provided, you MUST include the "Regression Impact Areas" and "Regression Retest Checklist" sections. Never skip them.
@@ -122,38 +140,43 @@ Role Access Matrix (for this ticket's feature — only include roles selected in
 (C) If Cross-System: list both standard + vendor portal role rows.
 
 Positive Test Scenarios:
-| # | Role | User Action | What User Expects to See | Priority | Type |
-|---|------|------------|--------------------------|----------|------|
-| 1 | Admin | [step-by-step in plain language — happy path] | [screen feedback] | Critical/High/Medium/Low | Manual/Automatable |
-| 2 | Limited Admin | [same or similar action] | [screen feedback] | Critical/High/Medium/Low | Manual/Automatable |
+| # | Role | Variable Under Test | Dependent Variables / Controls | Expected Proof | Priority | Type |
+|---|------|--------------------|-----------------------------|----------------|----------|------|
+| 1 | Both | [what is being tested — the feature, behavior, or interaction from the user's perspective] | [other fields, settings, or conditions that affect the outcome] | [specific observable proof the user would see] | Critical/High/Medium/Low | Manual / Automatable |
 
 Negative Test Scenarios:
-| # | Role | User Action (wrong/invalid) | What User Does Wrong | Expected Error / Feedback | Priority | Type |
-|---|------|----------------------------|---------------------|--------------------------|----------|------|
-| 1 | Admin | [bad input, missing field, navigate away, double-click] | [the mistake] | [error message, validation, blocked action] | High/Medium/Low | Manual/Automatable |
+| # | Role | Variable Under Test | Invalid Condition | Expected Proof (error behavior) | Priority | Type |
+|---|------|--------------------|--------------------|-------------------------------|----------|------|
+| 1 | Both | [what is being tested negatively from the user's perspective] | [bad input, missing field, navigate away, unauthorized] | [specific error message or blocked action the user sees] | High/Medium/Low | Manual / Automatable |
 
 Race Condition Scenarios (only if ticket involves concurrency):
 | # | Conflicting Actions | Timing | Expected Behavior | Type |
 |---|---------------------|--------|-------------------|------|
 
+Automation Assessment:
+- Total scenarios: [count]
+- Automatable: [count] — [what can be automated and why]
+- Manual: [count] — [what stays manual and why]
+- Recommended automation priority: [which scenarios to automate first]
+
 Confusing or Unclear Areas:
 - Are there parts of the ticket where user behavior is ambiguous or undefined? If none, state "Ticket is clear."
 ${appMapBlock ? `
 Regression Impact Areas:
-Use the ticket labels to identify which codebases are changed. Scan the application map for screens and routes that share navigation, data display, forms, or workflows with the ticket's feature. List every match from the user's perspective:
-| Screen / Route | Service (web-app / core-service / vendor-management) | Risk Level | Connection to Ticket |
-|---------------|------------------------------------------------------|-----------|---------------------|
-| [exact route from app map] | [which codebase] | High / Medium / Low | [shared navigation, shared data display, shared form, user flow overlap] |
+Go ELEMENT-LEVEL from the user's perspective: list the specific UI elements (fields, filters, dropdowns, list columns, cards, modals, form inputs) that display or consume the same data the ticket's feature modifies.
+| Element / Field / Filter | Location (screen or route) | Service | Risk Level | Why It Could Break |
+|--------------------------|---------------------------|---------|-----------|-------------------|
+| [specific UI element the user interacts with] | [route from app map] | [web-app / core-service / vendor-management] | High / Medium / Low | [shares same data, same component, same filter logic] |
 
 Regression Test Scenarios:
-For each High and Medium risk regression area, create concrete user-facing test scenarios:
-| # | Screen / Route | Service | User Action | What User Should See (unchanged) | Type |
-|---|---------------|---------|-------------|----------------------------------|------|
-| 1 | [route from impact areas] | [web-app/core-service/vendor-management] | [navigate to screen, perform action] | [expected unchanged behavior] | Manual / Automatable |
+For each High and Medium risk element, create a user-facing test scenario following SCENARIO WRITING RULES:
+| # | Element Under Test | Service | Variable Under Test | Expected Proof (unchanged behavior) | Type |
+|---|-------------------|---------|--------------------|------------------------------------|------|
+| 1 | [specific element from impact areas] | [service] | [what aspect is being verified from user perspective] | [specific proof the user sees unchanged behavior] | Manual / Automatable |
 
 Regression Retest Checklist:
-For each High and Medium risk area above, write a user-facing test step:
-1. [Navigate to screen / Perform user action] → [what user should see unchanged]
+For each High and Medium risk element above, write a user-facing verification step:
+1. [Go to specific screen, locate specific element] → [expected unchanged behavior with proof]
 2. ...
 ` : ""}
 ${appMapBlock}`;
