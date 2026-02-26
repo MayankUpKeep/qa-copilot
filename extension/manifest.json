@@ -1,16 +1,19 @@
 {
   "name": "QA Copilot",
-  "version": "1.0",
+  "version": "2.1",
+  "description": "Send Jira tickets to QA Copilot for test planning and bug reporting.",
   "manifest_version": 3,
-  "permissions": ["activeTab", "scripting"],
+  "permissions": ["activeTab"],
   "host_permissions": [
-    "https://*.atlassian.net/*",
-    "http://localhost:3000/*"
+    "https://*.atlassian.net/*"
   ],
   "content_scripts": [
     {
       "matches": ["https://*.atlassian.net/*"],
-      "js": ["content.js"]
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle",
+      "all_frames": false
     }
   ]
 }

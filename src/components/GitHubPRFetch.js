@@ -53,7 +53,7 @@ export default function GitHubPRFetch({ onFetched, colorClass = "orange" }) {
     <div className="flex items-center gap-2 mb-4">
       <input
         type="text"
-        className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 flex-1 min-w-[280px]"
+        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 flex-1 min-w-[280px]"
         placeholder="https://github.com/owner/repo/pull/123"
         value={prUrl}
         onChange={(e) => setPrUrl(e.target.value)}

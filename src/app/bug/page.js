@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import Spinner from "@/components/Spinner";
 import InfoTooltip from "@/components/InfoTooltip";
 import JiraFetch from "@/components/JiraFetch";
 import GitHubPRFetch from "@/components/GitHubPRFetch";
@@ -12,6 +13,8 @@ export default function BugPage() {
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const fromExtension = useRef(false);
+  const [urlTicketId, setUrlTicketId] = useState(null);
 
   const generateBug = async (incomingText) => {
     const textToUse = incomingText || bug;
@@ -50,16 +53,19 @@ export default function BugPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const tid = params.get("ticketId");
+    if (tid) {
+      fromExtension.current = true;
+      setUrlTicketId(tid.trim().toUpperCase());
+      return;
+    }
+
     const jira = params.get("jira");
-
-    if (!jira) return;
-
-    const decoded = decodeURIComponent(jira);
-    setBug(decoded);
-
-    setTimeout(() => {
-      generateBug(decoded);
-    }, 600);
+    if (jira) {
+      const decoded = decodeURIComponent(jira);
+      setBug(decoded);
+      setTimeout(() => generateBug(decoded), 600);
+    }
   }, []);
 
   const copyToClipboard = async () => {
@@ -71,28 +77,36 @@ export default function BugPage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold mb-6">Bug Report Generator</h2>
+      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Bug Report Generator</h2>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Generate detailed bug reports from brief descriptions</p>
       <JiraFetch
-        onFetched={(text) => setBug(text)}
+        initialTicketId={urlTicketId}
+        onFetched={(text) => {
+          setBug(text);
+          if (fromExtension.current) {
+            fromExtension.current = false;
+            setTimeout(() => generateBug(text), 500);
+          }
+        }}
         onPrFetched={(text) => setPrContext(text)}
         colorClass="red"
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Bug Description</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Bug Description</label>
           <textarea
-            className="w-full min-h-[250px] p-4 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full min-h-[250px] p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-red-500"
             placeholder="Describe the issue in 1-2 lines (what happened)..."
             value={bug}
             onChange={(e) => setBug(e.target.value)}
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">PR / Code Changes</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">PR / Code Changes</label>
           <GitHubPRFetch onFetched={(text) => setPrContext((prev) => prev ? prev + "\n\n" + text : text)} colorClass="orange" />
           <textarea
-            className="w-full min-h-[210px] p-4 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-orange-500"
+            className="w-full min-h-[210px] p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-orange-500"
             placeholder="Auto-populated from Jira linked PRs, or fetch a PR manually above..."
             value={prContext}
             onChange={(e) => setPrContext(e.target.value)}
@@ -103,9 +117,10 @@ export default function BugPage() {
       <div className="flex gap-3">
         <button
           onClick={() => generateBug()}
-          className="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition-colors font-medium"
+          disabled={loading || !bug}
+          className="inline-flex items-center gap-2 bg-red-600 text-white px-5 py-2.5 rounded-lg hover:bg-red-700 transition-all font-medium text-sm shadow-sm disabled:opacity-50"
         >
-          {loading ? "Generating..." : "Generate Bug Report"}
+          {loading ? <><Spinner className="w-4 h-4" /> Generating...</> : "Generate Bug Report"}
         </button>
 
         <button
@@ -114,7 +129,7 @@ export default function BugPage() {
             setPrContext("");
             setResult("");
           }}
-          className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors font-medium"
+          className="border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 px-5 py-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all font-medium text-sm"
         >
           Clear
         </button>
@@ -123,17 +138,17 @@ export default function BugPage() {
       </div>
 
       {result && (
-        <div className="mt-8">
-          <div className="flex justify-end mb-2">
+        <div className="mt-8 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">BUG REPORT</span>
             <button
               onClick={copyToClipboard}
-              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+              className="inline-flex items-center gap-1.5 bg-green-600 text-white px-3.5 py-1.5 rounded-lg text-xs font-medium hover:bg-green-700 transition-colors"
             >
               {copied ? "Copied!" : "Copy Bug Report"}
             </button>
           </div>
-
-          <div className="p-6 bg-white rounded-lg border border-gray-300">
+          <div className="p-6">
             <FormattedOutput text={result} />
           </div>
         </div>

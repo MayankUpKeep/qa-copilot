@@ -91,7 +91,8 @@ AUTOMATION CLASSIFICATION (two-pass):
 - Then, review each scenario and classify it as:
   * "Automatable" — if it can be reliably automated with Playwright/JavaScript (standard UI interactions, form submissions, API calls, navigation, element visibility checks).
   * "Manual" — if it requires visual judgment, complex multi-step user flows with subjective validation, drag-and-drop, file uploads with visual verification, or cross-device testing.
-- In the final output, replace "TBD" with the classification. After all scenario tables, add an "Automation Assessment" section summarizing the split.
+- In the final output, replace "TBD" with the classification.
+- COUNTING RULE (critical): After all scenario tables are complete, you MUST go back and count every single row across ALL tables — Positive Test Scenarios, Negative Test Scenarios, Race Condition Scenarios (if present), AND Regression Test Scenarios (if present). The "Total scenarios" number MUST equal the exact sum of rows across all these tables. Automatable + Manual MUST equal Total. Double-check by re-counting each table. If the math does not add up, re-count before outputting.
 
 QUALITY:
 - Output must be directly pasteable into Jira fields. Use bullets and tables, no paragraphs or filler.
@@ -181,7 +182,12 @@ Race Condition Scenarios (only if ticket involves concurrency):
 |---|---------------------|--------|-------------------|------|
 
 Automation Assessment:
-- Total scenarios: [count]
+(Count EVERY numbered row from ALL scenario tables above. Automatable + Manual MUST equal Total.)
+- Positive scenarios: [count from Positive table]
+- Negative scenarios: [count from Negative table]
+- Race condition scenarios: [count from Race Condition table, or 0 if skipped]
+- Regression scenarios: [count from Regression Test Scenarios table, or 0 if no app map]
+- **Total scenarios: [sum of above]**
 - Automatable: [count] — [brief list of what can be automated and why (e.g., "standard form validation, API response checks, element visibility")]
 - Manual: [count] — [brief list of what stays manual and why (e.g., "visual layout comparison, drag-and-drop reordering, cross-browser rendering")]
 - Recommended automation priority: [which scenarios to automate first and why]

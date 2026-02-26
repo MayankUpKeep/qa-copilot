@@ -5,6 +5,8 @@ import InfoTooltip from "@/components/InfoTooltip";
 import JiraFetch from "@/components/JiraFetch";
 import GitHubPRFetch from "@/components/GitHubPRFetch";
 import FormattedOutput from "@/components/FormattedOutput";
+import Spinner from "@/components/Spinner";
+import useTicketFromUrl from "@/lib/useTicketFromUrl";
 
 const LS_KEY = "qa_evaluate";
 
@@ -48,6 +50,12 @@ export default function EvaluatePage() {
       .then((data) => setAppMapStatus(data))
       .catch(() => setAppMapStatus({ ok: false, hasMap: false }));
   }, []);
+
+  useTicketFromUrl({
+    onTicket: (text) => updateStory(text),
+    onPr: (text) => updatePr(text),
+    onLabels: (labels) => setTicketLabels(labels),
+  });
 
   const generatePlanA = async () => {
     if (!story) return;
@@ -166,8 +174,8 @@ export default function EvaluatePage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold mb-2">Evaluate & Define Scope</h2>
-      <p className="text-sm text-gray-500 mb-6">
+      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Evaluate & Define Scope</h2>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
         Plan A (user perspective) when the story is in <strong>Ready</strong>, Plan B (technical analysis) when the PR hits <strong>Code Review</strong>. Merge both to define the complete testing scope.
       </p>
 
@@ -177,125 +185,137 @@ export default function EvaluatePage() {
         colorClass="blue"
       />
 
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Ticket / Story</label>
+      <div className="mb-5">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ticket / Story</label>
         <textarea
-          className="w-full min-h-[150px] p-4 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full min-h-[150px] p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
           placeholder="Paste the full Jira story or bug description here..."
           value={story}
           onChange={(e) => updateStory(e.target.value)}
         />
       </div>
 
-      {/* ── PHASE 1: Plan A ── */}
-      <div className="mb-8 p-5 bg-gray-50 rounded-xl border border-gray-200">
-        <div className="flex items-center gap-3 mb-3">
-          <span className="bg-gray-600 text-white text-xs font-bold px-2.5 py-1 rounded">PHASE 1</span>
-          <h3 className="text-sm font-semibold text-gray-700">Story in Ready — User Perspective</h3>
+      {/* Phase 1: Plan A */}
+      <div className="mb-6 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+          <span className="bg-gray-800 text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider">PHASE 1</span>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Story in Ready — User Perspective</h3>
           <InfoTooltip description="Generate when the story moves to Ready. Thinks from the end-user's perspective: user journeys, UX flows, edge cases a real user would hit. No code or technical details." />
         </div>
 
-        <div className="flex gap-2 mb-3">
-          <button
-            onClick={generatePlanA}
-            disabled={loadingA || !story}
-            className="bg-gray-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-800 disabled:opacity-50 transition-colors"
-          >
-            {loadingA ? "Generating..." : "Generate Plan A"}
-          </button>
-          {planA && (
+        <div className="p-5">
+          <div className="flex gap-2 mb-3">
             <button
-              onClick={() => copyText(planA, "planA")}
-              className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700"
+              onClick={generatePlanA}
+              disabled={loadingA || !story}
+              className="inline-flex items-center gap-2 bg-gray-800 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-900 disabled:opacity-50 transition-all font-medium shadow-sm"
             >
-              {copiedSection === "planA" ? "Copied!" : "Copy Plan A"}
+              {loadingA ? <><Spinner className="w-3.5 h-3.5" /> Generating...</> : "Generate Plan A"}
             </button>
+            {planA && (
+              <button
+                onClick={() => copyText(planA, "planA")}
+                className="inline-flex items-center gap-1.5 bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-green-700 transition-colors"
+              >
+                {copiedSection === "planA" ? "Copied!" : "Copy Plan A"}
+              </button>
+            )}
+          </div>
+
+          <textarea
+            className="w-full min-h-[200px] p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50/50 dark:bg-gray-800/50 text-gray-900 dark:text-gray-100 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-gray-400 focus:bg-white font-mono transition-colors"
+            placeholder="Plan A will appear here after generating, or paste a previously saved plan..."
+            value={planA}
+            onChange={(e) => { setPlanA(e.target.value); persist({ planA: e.target.value }); }}
+          />
+          {loadingA && (
+            <div className="flex items-center gap-2 text-gray-400 text-xs mt-2">
+              <Spinner className="w-3 h-3" /> Generating user-perspective plan...
+            </div>
           )}
         </div>
-
-        <textarea
-          className="w-full min-h-[200px] p-4 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-gray-400 font-mono"
-          placeholder="Plan A will appear here after generating, or paste a previously saved plan..."
-          value={planA}
-          onChange={(e) => { setPlanA(e.target.value); persist({ planA: e.target.value }); }}
-        />
-        {loadingA && <div className="text-gray-400 text-xs mt-1 animate-pulse">Generating user-perspective plan...</div>}
       </div>
 
-      {/* ── PHASE 2: Plan B ── */}
-      <div className="mb-8 p-5 bg-blue-50 rounded-xl border border-blue-200">
-        <div className="flex items-center gap-3 mb-3">
-          <span className="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded">PHASE 2</span>
-          <h3 className="text-sm font-semibold text-gray-700">Code Review / Ready for Testing — Technical Analysis</h3>
+      {/* Phase 2: Plan B */}
+      <div className="mb-6 rounded-xl border border-blue-200 dark:border-blue-800 overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-3 bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-800">
+          <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider">PHASE 2</span>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Code Review — Technical Analysis</h3>
           <InfoTooltip description="Generate when the PR is in code review. Strictly technical: analyzes actual code changes, API behavior, error handling, boundary conditions, and regression from the PR diff." />
         </div>
 
-        <div className="mb-3">
-          <label className="block text-sm font-medium text-gray-700 mb-1">PR / Code Changes</label>
-          <GitHubPRFetch onFetched={(text) => updatePr(text)} colorClass="orange" />
-          <textarea
-            className="w-full min-h-[100px] p-4 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-orange-500"
-            placeholder="Auto-populated from Jira linked PRs, or fetch a PR manually above..."
-            value={prContext}
-            onChange={(e) => updatePr(e.target.value)}
-          />
-        </div>
-
-        {appMapStatus?.hasMap && (
-          <div className="text-xs text-gray-500 mb-2">
-            App map: {appMapStatus.routes?.length || 0} routes, {(appMapStatus.coreEndpoints?.length || 0) + (appMapStatus.webEndpoints?.length || 0)} endpoints
+        <div className="p-5">
+          <div className="mb-3">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">PR / Code Changes</label>
+            <GitHubPRFetch onFetched={(text) => updatePr(text)} colorClass="orange" />
+            <textarea
+              className="w-full min-h-[100px] p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-orange-500"
+              placeholder="Auto-populated from Jira linked PRs, or fetch a PR manually above..."
+              value={prContext}
+              onChange={(e) => updatePr(e.target.value)}
+            />
           </div>
-        )}
-        {appMapStatus && !appMapStatus.hasMap && appMapStatus.ok && (
-          <div className="text-xs text-amber-600 mb-2">App map not configured — regression areas won't be included.</div>
-        )}
 
-        <div className="flex gap-2 mb-3">
-          <button
-            onClick={generatePlanB}
-            disabled={loadingB || !story}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {loadingB ? "Generating..." : "Generate Plan B"}
-          </button>
-          {planB && (
+          {appMapStatus?.hasMap && (
+            <div className="text-xs text-gray-400 mb-3">
+              App map: {appMapStatus.routes?.length || 0} routes, {(appMapStatus.coreEndpoints?.length || 0) + (appMapStatus.webEndpoints?.length || 0)} endpoints
+            </div>
+          )}
+          {appMapStatus && !appMapStatus.hasMap && appMapStatus.ok && (
+            <div className="text-xs text-amber-600 mb-3">App map not configured — regression areas won&apos;t be included.</div>
+          )}
+
+          <div className="flex gap-2 mb-3">
             <button
-              onClick={() => copyText(planB, "planB")}
-              className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700"
+              onClick={generatePlanB}
+              disabled={loadingB || !story}
+              className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 transition-all font-medium shadow-sm"
             >
-              {copiedSection === "planB" ? "Copied!" : "Copy Plan B"}
+              {loadingB ? <><Spinner className="w-3.5 h-3.5" /> Generating...</> : "Generate Plan B"}
             </button>
+            {planB && (
+              <button
+                onClick={() => copyText(planB, "planB")}
+                className="inline-flex items-center gap-1.5 bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-green-700 transition-colors"
+              >
+                {copiedSection === "planB" ? "Copied!" : "Copy Plan B"}
+              </button>
+            )}
+          </div>
+
+          <textarea
+            className="w-full min-h-[200px] p-4 border border-blue-200 dark:border-blue-800 rounded-lg bg-blue-50/30 dark:bg-blue-900/20 text-gray-900 dark:text-gray-100 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white font-mono transition-colors"
+            placeholder="Plan B will appear here after generating, or paste a previously saved plan..."
+            value={planB}
+            onChange={(e) => { setPlanB(e.target.value); persist({ planB: e.target.value }); }}
+          />
+          {loadingB && (
+            <div className="flex items-center gap-2 text-blue-400 text-xs mt-2">
+              <Spinner className="w-3 h-3" /> Generating technical analysis from PR...
+            </div>
           )}
         </div>
-
-        <textarea
-          className="w-full min-h-[200px] p-4 border border-blue-300 rounded-lg bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono"
-          placeholder="Plan B will appear here after generating, or paste a previously saved plan..."
-          value={planB}
-          onChange={(e) => { setPlanB(e.target.value); persist({ planB: e.target.value }); }}
-        />
-        {loadingB && <div className="text-blue-400 text-xs mt-1 animate-pulse">Generating technical analysis from PR...</div>}
       </div>
 
-      {/* ── DEFINE SCOPE ── */}
-      <div className="mb-4 flex flex-wrap gap-3 items-center">
+      {/* Action Buttons */}
+      <div className="mb-6 flex flex-wrap gap-3 items-center">
         <button
           onClick={defineScope}
           disabled={scopeLoading || !planA || !planB}
-          className="bg-emerald-600 text-white px-6 py-3 rounded-lg hover:bg-emerald-700 transition-colors font-medium disabled:opacity-50"
+          className="inline-flex items-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-lg hover:bg-emerald-700 transition-all font-medium text-sm shadow-sm disabled:opacity-50"
         >
-          {scopeLoading ? "Defining scope..." : "Define Complete Scope"}
+          {scopeLoading ? <><Spinner className="w-4 h-4" /> Refining...</> : "Refined Test Plan"}
         </button>
         <button
           onClick={showDiff}
           disabled={diffLoading || !planA || !planB}
-          className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:opacity-50"
+          className="inline-flex items-center gap-2 bg-purple-600 text-white px-5 py-2.5 rounded-lg hover:bg-purple-700 transition-all font-medium text-sm shadow-sm disabled:opacity-50"
         >
-          {diffLoading ? "Comparing..." : "Show Diff"}
+          {diffLoading ? <><Spinner className="w-4 h-4" /> Comparing...</> : "Show Diff"}
         </button>
         <button
           onClick={clearAll}
-          className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors font-medium"
+          className="border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 px-5 py-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all font-medium text-sm"
         >
           Clear All
         </button>
@@ -306,28 +326,29 @@ export default function EvaluatePage() {
           <span className="text-xs text-amber-600">Plan A ready. Generate Plan B when the PR is available.</span>
         )}
         {planA && planB && !scope && !scopeLoading && (
-          <span className="text-xs text-emerald-600">Both plans ready — click to define scope.</span>
+          <span className="text-xs text-emerald-600">Both plans ready.</span>
         )}
       </div>
 
+      {/* Diff Output */}
       {(diff || diffLoading) && (
-        <div className="mt-4 mb-6 p-5 bg-purple-50 rounded-xl border-2 border-purple-400">
-          <div className="flex items-center justify-between mb-3">
+        <div className="mb-6 rounded-xl border border-purple-200 dark:border-purple-800 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 bg-purple-50 dark:bg-purple-900/30 border-b border-purple-200 dark:border-purple-800">
             <div className="flex items-center gap-3">
-              <span className="bg-purple-600 text-white text-xs font-bold px-2.5 py-1 rounded">DIFF</span>
-              <h3 className="text-sm font-semibold text-gray-700">Plan A vs Plan B — Alignment Diff</h3>
+              <span className="bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider">DIFF</span>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Plan A vs Plan B</h3>
             </div>
             {diff && (
               <div className="flex gap-2">
                 <button
                   onClick={() => copyText(diff, "diff")}
-                  className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
+                  className="inline-flex items-center gap-1.5 bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-700 transition-colors"
                 >
                   {copiedSection === "diff" ? "Copied!" : "Copy Markdown"}
                 </button>
                 <button
                   onClick={() => copyAsPlainText(diff, "diffPlain")}
-                  className="bg-gray-600 text-white px-3 py-1 rounded text-xs hover:bg-gray-700"
+                  className="inline-flex items-center gap-1.5 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
                   {copiedSection === "diffPlain" ? "Copied!" : "Copy as Text"}
                 </button>
@@ -335,15 +356,17 @@ export default function EvaluatePage() {
             )}
           </div>
           {diff && (
-            <div className="flex flex-wrap gap-3 mb-3 text-[11px]">
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-green-100 text-green-800 border-green-300 font-medium">ALIGNED — Same coverage in both</span>
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-amber-100 text-amber-800 border-amber-300 font-medium">PLAN A ONLY — Potential gap</span>
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-blue-100 text-blue-800 border-blue-300 font-medium">PLAN B ONLY — Undocumented change</span>
+            <div className="flex flex-wrap gap-2 px-5 py-2.5 bg-purple-50/50 dark:bg-purple-900/20 border-b border-purple-100 dark:border-purple-800 text-[11px]">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800 font-medium">ALIGNED</span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 font-medium">PLAN A ONLY</span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800 font-medium">PLAN B ONLY</span>
             </div>
           )}
-          <div className="p-4 bg-white rounded-lg border border-purple-300 min-h-[200px]">
+          <div className="p-5">
             {diffLoading ? (
-              <div className="text-purple-500 text-sm animate-pulse">Comparing Plan A and Plan B line by line...</div>
+              <div className="flex items-center gap-2 text-purple-500 text-sm">
+                <Spinner className="w-4 h-4" /> Comparing Plan A and Plan B...
+              </div>
             ) : (
               <FormattedOutput text={diff} />
             )}
@@ -351,33 +374,36 @@ export default function EvaluatePage() {
         </div>
       )}
 
+      {/* Refined Plan Output */}
       {(scope || scopeLoading) && (
-        <div className="mt-4 p-5 bg-emerald-50 rounded-xl border-2 border-emerald-400">
-          <div className="flex items-center justify-between mb-3">
+        <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 bg-emerald-50 dark:bg-emerald-900/30 border-b border-emerald-200 dark:border-emerald-800">
             <div className="flex items-center gap-3">
-              <span className="bg-emerald-600 text-white text-xs font-bold px-2.5 py-1 rounded">REFINED PLAN</span>
-              <h3 className="text-sm font-semibold text-gray-700">Refined Test Plan</h3>
+              <span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider">REFINED PLAN</span>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Refined Test Plan</h3>
             </div>
             {scope && (
               <div className="flex gap-2">
                 <button
                   onClick={() => copyText(scope, "scope")}
-                  className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
+                  className="inline-flex items-center gap-1.5 bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-700 transition-colors"
                 >
                   {copiedSection === "scope" ? "Copied!" : "Copy Markdown"}
                 </button>
                 <button
                   onClick={() => copyAsPlainText(scope, "scopePlain")}
-                  className="bg-gray-600 text-white px-3 py-1 rounded text-xs hover:bg-gray-700"
+                  className="inline-flex items-center gap-1.5 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
                   {copiedSection === "scopePlain" ? "Copied!" : "Copy as Text"}
                 </button>
               </div>
             )}
           </div>
-          <div className="p-4 bg-white rounded-lg border border-emerald-300 min-h-[200px]">
+          <div className="p-5">
             {scopeLoading ? (
-              <div className="text-emerald-500 text-sm animate-pulse">Merging both plans into a refined test plan with thorough regression...</div>
+              <div className="flex items-center gap-2 text-emerald-500 text-sm">
+                <Spinner className="w-4 h-4" /> Merging both plans into a refined test plan...
+              </div>
             ) : (
               <FormattedOutput text={scope} />
             )}

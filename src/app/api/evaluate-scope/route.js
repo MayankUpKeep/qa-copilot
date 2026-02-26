@@ -55,6 +55,7 @@ REGRESSION — BE THOROUGH:
 
 AUTOMATION CLASSIFICATION:
 - Classify each scenario as "Automatable" (Playwright/JS: standard UI interactions, API calls, element checks) or "Manual" (visual judgment, complex multi-step, drag-and-drop).
+- COUNTING RULE (critical): After all scenario tables are complete, you MUST go back and count every single row across ALL tables — Positive Test Scenarios, Negative Test Scenarios, AND Regression Test Scenarios (if present). The "Total scenarios" number MUST equal the exact sum of rows across all these tables. Automatable + Manual MUST equal Total. Double-check by re-counting each table. If the math does not add up, re-count before outputting.
 
 QUALITY:
 - Output must be directly pasteable into Jira.
@@ -104,7 +105,11 @@ Negative Test Scenarios (merged — include negatives from both plans):
 | 1 | Both | [what is being tested negatively] | [invalid input/state/access] | [specific error/validation observed] | Manual / Automatable |
 
 Automation Assessment:
-- Total scenarios: [count]
+(Count EVERY numbered row from ALL scenario tables above. Automatable + Manual MUST equal Total.)
+- Positive scenarios: [count from Positive table]
+- Negative scenarios: [count from Negative table]
+- Regression scenarios: [count from Regression Test Scenarios table, or 0 if no app map]
+- **Total scenarios: [sum of above]**
 - Automatable: [count] — [what can be automated and why]
 - Manual: [count] — [what stays manual and why]
 - Recommended automation priority: [which to automate first]

@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Spinner from "@/components/Spinner";
 import InfoTooltip from "@/components/InfoTooltip";
 import JiraFetch from "@/components/JiraFetch";
 import GitHubPRFetch from "@/components/GitHubPRFetch";
 import FormattedOutput from "@/components/FormattedOutput";
+import useTicketFromUrl from "@/lib/useTicketFromUrl";
 
 export default function AutomationPage() {
   const [story, setStory] = useState("");
@@ -12,6 +14,11 @@ export default function AutomationPage() {
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  useTicketFromUrl({
+    onTicket: (text) => setStory(text),
+    onPr: (text) => setPrContext(text),
+  });
 
   const generateTest = async () => {
     if (!story) return;
@@ -45,7 +52,9 @@ export default function AutomationPage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold mb-6">Playwright Test Generator</h2>
+      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Playwright Test Generator</h2>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Generate Playwright test code from Jira stories or acceptance criteria.</p>
+
       <JiraFetch
         onFetched={(text) => setStory(text)}
         onPrFetched={(text) => setPrContext(text)}
@@ -54,19 +63,19 @@ export default function AutomationPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Ticket / Story</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ticket / Story</label>
           <textarea
-            className="w-full min-h-[240px] p-4 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full min-h-[240px] p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-green-500"
             placeholder="Paste Jira story or acceptance criteria..."
             value={story}
             onChange={(e) => setStory(e.target.value)}
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">PR / Code Changes</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">PR / Code Changes</label>
           <GitHubPRFetch onFetched={(text) => setPrContext((prev) => prev ? prev + "\n\n" + text : text)} colorClass="orange" />
           <textarea
-            className="w-full min-h-[200px] p-4 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-orange-500"
+            className="w-full min-h-[200px] p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-orange-500"
             placeholder="Auto-populated from Jira linked PRs, or fetch a PR manually above..."
             value={prContext}
             onChange={(e) => setPrContext(e.target.value)}
@@ -77,9 +86,10 @@ export default function AutomationPage() {
       <div className="flex gap-3">
         <button
           onClick={generateTest}
-          className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors font-medium"
+          disabled={loading || !story}
+          className="inline-flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-lg hover:bg-green-700 transition-all font-medium text-sm shadow-sm disabled:opacity-50"
         >
-          {loading ? "Generating..." : "Generate Playwright Test"}
+          {loading ? <><Spinner className="w-4 h-4" /> Generating...</> : "Generate Playwright Test"}
         </button>
         <button
           onClick={() => {
@@ -87,7 +97,7 @@ export default function AutomationPage() {
             setPrContext("");
             setResult("");
           }}
-          className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-colors font-medium"
+          className="border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 px-5 py-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all font-medium text-sm"
         >
           Clear
         </button>
@@ -95,17 +105,17 @@ export default function AutomationPage() {
       </div>
 
       {result && (
-        <div className="mt-8">
-          <div className="flex justify-end mb-2">
+        <div className="mt-8 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">PLAYWRIGHT TEST</span>
             <button
               onClick={copyToClipboard}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              className="inline-flex items-center gap-1.5 bg-green-600 text-white px-3.5 py-1.5 rounded-lg text-xs font-medium hover:bg-green-700 transition-colors"
             >
               {copied ? "Copied!" : "Copy Test File"}
             </button>
           </div>
-
-          <div className="p-6 bg-white rounded-lg border border-gray-300 overflow-auto">
+          <div className="p-6 overflow-auto">
             <FormattedOutput text={result} />
           </div>
         </div>

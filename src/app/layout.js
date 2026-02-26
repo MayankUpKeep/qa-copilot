@@ -1,5 +1,11 @@
 import "./globals.css";
-import Link from "next/link";
+import { Inter } from "next/font/google";
+import NavBar from "@/components/NavBar";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+});
 
 export const metadata = {
   title: "QA Copilot",
@@ -8,58 +14,26 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
-      <body className="bg-gray-100 text-gray-900">
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem("qa_theme");if(t==="dark"||(!t&&window.matchMedia("(prefers-color-scheme:dark)").matches)){document.documentElement.classList.add("dark")}}catch(e){}})();`,
+          }}
+        />
+      </head>
+      <body className="font-sans bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 antialiased transition-colors duration-200">
+        <NavBar />
 
-        <nav className="bg-gray-900 text-white px-8 py-4 flex items-center justify-between shadow-md">
-          <div className="flex items-center gap-8">
-            <h1 className="text-xl font-semibold tracking-wide">
-              QA Copilot
-            </h1>
-
-            <Link href="/" className="hover:text-blue-300 transition">
-              Test Plan
-            </Link>
-
-            <Link href="/bug" className="hover:text-red-300 transition">
-              Bug Report
-            </Link>
-
-            <Link href="/retest" className="hover:text-purple-300 transition">
-              Retest Assistant
-            </Link>
-
-            <Link href="/automation" className="hover:text-green-300 transition">
-              Automation
-            </Link>
-
-            <Link href="/standup" className="hover:text-indigo-300 transition">
-              Standup
-            </Link>
-
-            <Link href="/vision" className="hover:text-purple-300 transition">
-              Screenshot Bug
-            </Link>
-
-            <Link href="/evaluate" className="hover:text-cyan-300 transition">
-              Evaluate
-            </Link>
-
-            <Link href="/smoke" className="hover:text-indigo-300 transition">
-              Smoke Checklist
-            </Link>
-
-            <Link href="/verify" className="hover:text-emerald-300 transition">
-              QA Verify
-            </Link>
-
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-6 sm:p-8">
+            {children}
           </div>
-        </nav>
-
-        <main className="max-w-5xl mx-auto p-8">
-          {children}
         </main>
 
+        <footer className="max-w-6xl mx-auto px-6 pb-8 pt-2 text-center">
+          <p className="text-xs text-gray-400 dark:text-gray-600">QA Copilot &mdash; Personal QA Productivity Workspace</p>
+        </footer>
       </body>
     </html>
   );
