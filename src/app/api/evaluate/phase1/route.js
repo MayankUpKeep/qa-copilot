@@ -1,4 +1,4 @@
-import { anthropic, CLAUDE_MODEL, getTextFromResponse } from "@/lib/anthropic";
+import { streamClaude } from "@/lib/anthropic";
 import { getAppContext, formatAppContextForPrompt } from "@/lib/app-mapper";
 
 export async function POST(req) {
@@ -186,14 +186,11 @@ For each High and Medium risk element above, write a user-facing verification st
 ` : ""}
 ${appMapBlock}`;
 
-    const response = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 8192,
+    return streamClaude({
       system: systemInstruction,
       messages: [{ role: "user", content: prompt }],
+      max_tokens: 8192,
     });
-
-    return Response.json({ output: getTextFromResponse(response) });
   } catch (err) {
     console.error(err);
     return Response.json({ output: "Error generating Phase 1 plan." });

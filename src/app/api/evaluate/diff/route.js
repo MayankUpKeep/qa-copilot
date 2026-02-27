@@ -1,4 +1,4 @@
-import { anthropic, CLAUDE_MODEL, getTextFromResponse } from "@/lib/anthropic";
+import { streamClaude } from "@/lib/anthropic";
 
 export async function POST(req) {
   try {
@@ -54,14 +54,11 @@ Recommended Actions:
 - For each [PLAN A ONLY] item: suggest whether to confirm with developer, defer, or add to PR scope.
 - For each [PLAN B ONLY] item: suggest whether to add test coverage, flag for review, or accept as intentional.`;
 
-    const response = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 4000,
+    return streamClaude({
       system: systemInstruction,
       messages: [{ role: "user", content: prompt }],
+      max_tokens: 4000,
     });
-
-    return Response.json({ output: getTextFromResponse(response) });
   } catch (err) {
     console.error(err);
     return Response.json({ output: "Error generating diff." });

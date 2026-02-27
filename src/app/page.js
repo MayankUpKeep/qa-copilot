@@ -34,13 +34,6 @@ export default function Home() {
   const [createResult, setCreateResult] = useState(null);
   const [createError, setCreateError] = useState("");
 
-  useEffect(() => {
-    fetch("/api/app-map")
-      .then((r) => r.json())
-      .then((data) => setAppMapStatus(data))
-      .catch(() => setAppMapStatus({ ok: false, hasMap: false }));
-  }, []);
-
   const generateImagePreviews = async (fileList) => {
     const previews = [];
     for (const file of fileList) {
@@ -99,18 +92,43 @@ export default function Home() {
 
     const res = await fetch("/api/generate-plan", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ story: combinedInput, images: imageData, useAppMap, labels: ticketLabels }),
     });
 
-    const data = await res.json();
-    setResult(data.output);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let text = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+      setResult(text);
+    }
     setLoading(false);
   };
 
   useEffect(() => {
+    const savedStory = localStorage.getItem("qa_story");
+    const savedResult = localStorage.getItem("qa_result");
+    if (savedStory) setStory(savedStory);
+    if (savedResult) setResult(savedResult);
+
+    fetch("/api/app-map")
+      .then((r) => r.json())
+      .then((data) => setAppMapStatus(data))
+      .catch(() => setAppMapStatus({ ok: false, hasMap: false }));
+
+    fetch("/api/jira-import")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.content) {
+          setStory(data.content);
+          localStorage.setItem("qa_story", data.content);
+        }
+      })
+      .catch(() => {});
+
     const params = new URLSearchParams(window.location.search);
     const tid = params.get("ticketId");
     if (tid) {
@@ -127,7 +145,6 @@ export default function Home() {
       setTimeout(() => generatePlan(decoded), 300);
     }
   }, []);
-
 
   const copyToClipboard = async () => {
     if (!result) return;
@@ -204,24 +221,6 @@ export default function Home() {
       setCreating(false);
     }
   };
-
-  useEffect(() => {
-    const savedStory = localStorage.getItem("qa_story");
-    const savedResult = localStorage.getItem("qa_result");
-
-    if (savedStory) setStory(savedStory);
-    if (savedResult) setResult(savedResult);
-
-    fetch("/api/jira-import")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.content) {
-          setStory(data.content);
-          localStorage.setItem("qa_story", data.content);
-        }
-      });
-
-  }, []);
 
   return (
     <div>

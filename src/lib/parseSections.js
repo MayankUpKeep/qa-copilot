@@ -7,7 +7,7 @@
 export function parseTestPlanSections(text) {
   const sections = {};
 
-  const headerRegex = /^(?:\*\*|#{1,3}\s*)?((?:TP )?[A-Z][^:\n]*?)(?:\*\*)?:\s*$/gm;
+  const headerRegex = /^(?:\*\*|#{1,3}\s*)?((?:TP )?[A-Z][^:\n]*?)(?:\*\*)?:(?:\*\*)?\s*$/gm;
 
   const headerPositions = [];
   let match;

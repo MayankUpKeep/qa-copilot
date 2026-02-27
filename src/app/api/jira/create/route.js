@@ -118,18 +118,36 @@ function textToRichField(text) {
 
     flushTable();
 
-    const bulletMatch = line.match(/^\s*-\s+(.*)/);
+    const bulletMatch = line.match(/^(\s*)([-*])\s+(.*)/);
     const numberedMatch = line.match(/^\s*\d+\.\s+(.*)/);
 
     if (bulletMatch) {
-      if (!currentList || currentList.type !== "bulletList") {
-        flushList();
-        currentList = { type: "bulletList", content: [] };
+      const indent = bulletMatch[1].length;
+      const marker = bulletMatch[2];
+      const text = bulletMatch[3];
+      const isSubItem = indent >= 2 || marker === "*";
+
+      if (isSubItem && currentList && currentList.type === "bulletList" && currentList.content.length > 0) {
+        const lastItem = currentList.content[currentList.content.length - 1];
+        let nestedList = lastItem.content.find(c => c.type === "bulletList");
+        if (!nestedList) {
+          nestedList = { type: "bulletList", content: [] };
+          lastItem.content.push(nestedList);
+        }
+        nestedList.content.push({
+          type: "listItem",
+          content: [{ type: "paragraph", content: parseInline(text) }],
+        });
+      } else {
+        if (!currentList || currentList.type !== "bulletList") {
+          flushList();
+          currentList = { type: "bulletList", content: [] };
+        }
+        currentList.content.push({
+          type: "listItem",
+          content: [{ type: "paragraph", content: parseInline(text) }],
+        });
       }
-      currentList.content.push({
-        type: "listItem",
-        content: [{ type: "paragraph", content: parseInline(bulletMatch[1]) }],
-      });
     } else if (numberedMatch) {
       if (!currentList || currentList.type !== "orderedList") {
         flushList();

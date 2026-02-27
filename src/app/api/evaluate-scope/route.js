@@ -1,4 +1,4 @@
-import { anthropic, CLAUDE_MODEL, getTextFromResponse } from "@/lib/anthropic";
+import { streamClaude } from "@/lib/anthropic";
 import { getAppContext, formatAppContextForPrompt } from "@/lib/app-mapper";
 
 export async function POST(req) {
@@ -147,14 +147,11 @@ Test Execution Order:
 (Top 8-10 items in recommended execution order — prioritize regression higher than usual.)
 ${appMapBlock}`;
 
-    const response = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 8192,
+    return streamClaude({
       system: systemInstruction,
       messages: [{ role: "user", content: prompt }],
+      max_tokens: 8192,
     });
-
-    return Response.json({ output: getTextFromResponse(response) });
   } catch (err) {
     console.error(err);
     return Response.json({ output: "Error generating refined test plan." });

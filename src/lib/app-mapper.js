@@ -78,8 +78,9 @@ function extractRoutesFromContent(content, filePath) {
     const p = m[1].trim();
     if (p && p !== "*") routes.add(p.startsWith("/") ? p : "/" + p);
   }
-  // Route constants: ROUTE_NAME: '/path' (common in ROUTES objects)
-  const routeConst = /\w+:\s*["'](\/[a-z0-9/:_-]+)["']/gi;
+  // Route constants: Only match UPPER_CASE keys (ROUTE_NAME: '/path') to avoid
+  // false positives from generic object properties like description: '/description'
+  const routeConst = /[A-Z][A-Z_0-9]+\w*:\s*["'](\/[a-z0-9/:_-]+)["']/g;
   while ((m = routeConst.exec(content)) !== null) {
     const p = m[1].trim();
     if (p && p !== "/" && !p.includes("api")) routes.add(p);
@@ -92,6 +93,33 @@ function extractRoutesFromContent(content, filePath) {
     }
   }
   return Array.from(expanded);
+}
+
+const KNOWN_SUB_PATHS = new Set([
+  "add", "edit", "view", "new", "create", "delete", "list", "map", "end",
+  "start", "details", "description", "history", "record", "schedule",
+  "general", "options", "configuration", "categories", "fields", "internal",
+  "socket", "floorplans", "gateways", "sensors", "adjustments", "statuses",
+  "timers", "custom-fields", "asset-status", "public-settings", "signup",
+  "marketing-ehs", "request-portal", "request-portal-v2",
+]);
+
+/**
+ * Filter out false-positive routes that aren't real app pages.
+ */
+function isValidAppRoute(route) {
+  if (!route || route === "/") return false;
+  if (/\.\w{2,5}$/.test(route)) return false;
+  if (/\s/.test(route)) return false;
+  if (/^\/\d/.test(route)) return false;
+  if (route.includes("__webpack")) return false;
+  const segments = route.replace(/^\//, "").split("/").filter(Boolean);
+  if (segments.length === 0) return false;
+  const first = segments[0];
+  if (/[a-z][A-Z]/.test(first)) return false;
+  if (/^[A-Z]/.test(first)) return false;
+  if (segments.length === 1 && KNOWN_SUB_PATHS.has(first)) return false;
+  return true;
 }
 
 /**
@@ -147,7 +175,7 @@ function scanWebApp(rootPath) {
 
   for (const file of files) {
     const content = fs.readFileSync(file, "utf-8");
-    const routes = extractRoutesFromContent(content, file);
+    const routes = extractRoutesFromContent(content, file).filter(isValidAppRoute);
     const endpoints = extractApiCallsFromContent(content);
     routes.forEach((r) => allRoutes.add(r));
     endpoints.forEach((e) => allEndpoints.add(e));
@@ -285,12 +313,32 @@ function scanCoreService(rootPath) {
   };
 }
 
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+let _cachedAppContext = null;
+let _cacheTimestamp = 0;
+let _cacheKey = "";
+
+function buildCacheKey(options) {
+  const w = options.webAppPath || process.env.WEB_APP_PATH || "";
+  const c = options.coreServicePath || process.env.CORE_SERVICE_PATH || "";
+  const a = process.env.ADDITIONAL_SERVICES || "";
+  return `${w}|${c}|${a}`;
+}
+
 /**
  * Build app context from web-app and core-service paths (env or explicit).
- * @param {{ webAppPath?: string | null, coreServicePath?: string | null }} options
+ * Results are cached in-memory for CACHE_TTL_MS to avoid repeated filesystem scans.
+ * @param {{ webAppPath?: string | null, coreServicePath?: string | null, bustCache?: boolean }} options
  * @returns App context for regression prompt
  */
 function getAppContext(options = {}) {
+  const key = buildCacheKey(options);
+  const now = Date.now();
+
+  if (!options.bustCache && _cachedAppContext && key === _cacheKey && now - _cacheTimestamp < CACHE_TTL_MS) {
+    return _cachedAppContext;
+  }
+
   const webAppPath = options.webAppPath || process.env.WEB_APP_PATH || null;
   const coreServicePath = options.coreServicePath || process.env.CORE_SERVICE_PATH || null;
 
@@ -310,7 +358,7 @@ function getAppContext(options = {}) {
   if (additionalRaw.trim()) {
     for (const entry of additionalRaw.split(",")) {
       const [name, ...pathParts] = entry.trim().split(":");
-      const svcPath = pathParts.join(":"); // rejoin in case path has colons (e.g. Windows)
+      const svcPath = pathParts.join(":");
       if (!name || !svcPath) continue;
 
       const clientDir = path.join(svcPath, "client");
@@ -329,7 +377,7 @@ function getAppContext(options = {}) {
     }
   }
 
-  return {
+  const result = {
     webAppPath: webAppPath || undefined,
     coreServicePath: coreServicePath || undefined,
     routes,
@@ -340,10 +388,54 @@ function getAppContext(options = {}) {
     additionalServices,
     errors: [web.error, core.error, ...additionalServices.map((s) => s.error)].filter(Boolean),
   };
+
+  _cachedAppContext = result;
+  _cacheTimestamp = now;
+  _cacheKey = key;
+
+  return result;
 }
 
 /**
- * Format app context into a string block for the regression prompt.
+ * Group items by their first N path segments and return compact lines.
+ * e.g. ["/work-orders", "/work-orders/{id}", "/work-orders/{id}/edit"]
+ *    → "work-orders: /, /{id}, /{id}/edit"
+ */
+function groupByPrefix(items, { isEndpoint = false } = {}) {
+  const groups = {};
+  for (const item of items) {
+    let pathPart = item;
+    let method = "";
+    if (isEndpoint) {
+      const spaceIdx = item.indexOf(" ");
+      if (spaceIdx > 0) {
+        method = item.slice(0, spaceIdx) + " ";
+        pathPart = item.slice(spaceIdx + 1);
+      }
+    }
+    const segments = pathPart.replace(/^\//, "").split("/");
+    const prefix = segments[0] || "/";
+    const rest = segments.length > 1 ? "/" + segments.slice(1).join("/") : "/";
+    const key = isEndpoint ? prefix : prefix;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(method + rest);
+  }
+
+  const lines = [];
+  const sorted = Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
+  for (const [prefix, paths] of sorted) {
+    const unique = [...new Set(paths)];
+    if (unique.length <= 4) {
+      lines.push(`- /${prefix}: ${unique.join(", ")}`);
+    } else {
+      lines.push(`- /${prefix}: ${unique.slice(0, 4).join(", ")} (+${unique.length - 4} more)`);
+    }
+  }
+  return lines;
+}
+
+/**
+ * Format app context into a compact string block for the regression prompt.
  */
 function formatAppContextForPrompt(appContext) {
   if (!appContext || (!appContext.routes?.length && !appContext.coreEndpoints?.length && !appContext.webEndpoints?.length && !appContext.additionalServices?.length)) {
@@ -351,58 +443,42 @@ function formatAppContextForPrompt(appContext) {
   }
   const lines = ["\n--- Application map (use this to ground regression areas; only suggest areas that appear below) ---\n"];
   if (appContext.routes?.length) {
-    lines.push("Frontend routes (pages/screens):");
-    lines.push(appContext.routes.map((r) => `- ${r}`).join("\n"));
-    lines.push("");
-  }
-  if (appContext.webEndpoints?.length) {
-    lines.push("API calls from frontend:");
-    lines.push(appContext.webEndpoints.slice(0, 80).map((e) => `- ${e}`).join("\n"));
-    if (appContext.webEndpoints.length > 80) lines.push(`... and ${appContext.webEndpoints.length - 80} more`);
+    lines.push(`Frontend routes (${appContext.routes.length} total):`);
+    lines.push(...groupByPrefix(appContext.routes));
     lines.push("");
   }
   if (appContext.coreEndpoints?.length) {
-    lines.push("Backend endpoints (core-service):");
-    lines.push(appContext.coreEndpoints.slice(0, 100).map((e) => `- ${e}`).join("\n"));
-    if (appContext.coreEndpoints.length > 100) lines.push(`... and ${appContext.coreEndpoints.length - 100} more`);
+    lines.push(`Backend endpoints (${appContext.coreEndpoints.length} total):`);
+    lines.push(...groupByPrefix(appContext.coreEndpoints, { isEndpoint: true }));
     lines.push("");
   }
   if (appContext.modules?.length) {
-    lines.push("Backend modules/areas:");
-    lines.push(appContext.modules.map((m) => `- ${m}`).join("\n"));
+    lines.push("Backend modules: " + appContext.modules.join(", "));
     lines.push("");
   }
 
   for (const svc of appContext.additionalServices || []) {
-    const hasData = svc.routes?.length || svc.webEndpoints?.length || svc.coreEndpoints?.length || svc.modules?.length;
+    const hasData = svc.routes?.length || svc.coreEndpoints?.length || svc.modules?.length;
     if (!hasData) continue;
 
     lines.push(`\n=== ${svc.name} ===\n`);
     if (svc.routes?.length) {
-      lines.push(`${svc.name} frontend routes:`);
-      lines.push(svc.routes.map((r) => `- ${r}`).join("\n"));
-      lines.push("");
-    }
-    if (svc.webEndpoints?.length) {
-      lines.push(`${svc.name} API calls from frontend:`);
-      lines.push(svc.webEndpoints.slice(0, 60).map((e) => `- ${e}`).join("\n"));
-      if (svc.webEndpoints.length > 60) lines.push(`... and ${svc.webEndpoints.length - 60} more`);
+      lines.push(`${svc.name} routes (${svc.routes.length} total):`);
+      lines.push(...groupByPrefix(svc.routes));
       lines.push("");
     }
     if (svc.coreEndpoints?.length) {
-      lines.push(`${svc.name} backend endpoints:`);
-      lines.push(svc.coreEndpoints.slice(0, 80).map((e) => `- ${e}`).join("\n"));
-      if (svc.coreEndpoints.length > 80) lines.push(`... and ${svc.coreEndpoints.length - 80} more`);
+      lines.push(`${svc.name} endpoints (${svc.coreEndpoints.length} total):`);
+      lines.push(...groupByPrefix(svc.coreEndpoints, { isEndpoint: true }));
       lines.push("");
     }
     if (svc.modules?.length) {
-      lines.push(`${svc.name} modules/areas:`);
-      lines.push(svc.modules.map((m) => `- ${m}`).join("\n"));
+      lines.push(`${svc.name} modules: ${svc.modules.join(", ")}`);
       lines.push("");
     }
   }
 
-  lines.push("\n--- End of application map ---\n");
+  lines.push("--- End of application map ---\n");
   return lines.join("\n");
 }
 

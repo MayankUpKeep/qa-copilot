@@ -9,7 +9,7 @@ const inter = Inter({
 
 export const metadata = {
   title: "QA Copilot",
-  description: "Personal QA Productivity Workspace",
+  description: "Define testing scope from user and technical perspectives",
 };
 
 export default function RootLayout({ children }) {

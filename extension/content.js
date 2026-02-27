@@ -45,7 +45,7 @@
 
     const toggle = document.createElement("button");
     toggle.style.cssText = "width:48px;height:48px;border-radius:14px;border:none;background:linear-gradient(135deg,#2563eb,#4f46e5);color:white;font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 4px 12px rgba(37,99,235,0.35);display:flex;align-items:center;justify-content:center;";
-    toggle.textContent = "QA";
+    toggle.textContent = "SF";
     toggle.title = "QA Copilot — click to open";
 
     const menu = document.createElement("div");

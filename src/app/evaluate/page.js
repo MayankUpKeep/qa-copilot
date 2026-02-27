@@ -44,7 +44,9 @@ export default function EvaluatePage() {
     if (saved.planB) setPlanB(saved.planB);
     if (saved.scope) setScope(saved.scope);
     if (saved.diff) setDiff(saved.diff);
+  }, []);
 
+  useEffect(() => {
     fetch("/api/app-map")
       .then((r) => r.json())
       .then((data) => setAppMapStatus(data))
@@ -56,6 +58,20 @@ export default function EvaluatePage() {
     onPr: (text) => updatePr(text),
     onLabels: (labels) => setTicketLabels(labels),
   });
+
+  async function readStream(res, setter, persistKey) {
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let text = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+      setter(text);
+    }
+    persist({ [persistKey]: text });
+    return text;
+  }
 
   const generatePlanA = async () => {
     if (!story) return;
@@ -69,9 +85,7 @@ export default function EvaluatePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ story, labels: ticketLabels }),
     });
-    const data = await res.json();
-    setPlanA(data.output);
-    persist({ planA: data.output });
+    await readStream(res, setPlanA, "planA");
     setLoadingA(false);
   };
 
@@ -87,9 +101,7 @@ export default function EvaluatePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ story, prContext, labels: ticketLabels }),
     });
-    const data = await res.json();
-    setPlanB(data.output);
-    persist({ planB: data.output });
+    await readStream(res, setPlanB, "planB");
     setLoadingB(false);
   };
 
@@ -104,9 +116,7 @@ export default function EvaluatePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ story, planA, planB, labels: ticketLabels }),
       });
-      const data = await res.json();
-      setScope(data.output);
-      persist({ scope: data.output });
+      await readStream(res, setScope, "scope");
     } catch {
       setScope("Error generating scope.");
     }
@@ -124,9 +134,7 @@ export default function EvaluatePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ story, planA, planB }),
       });
-      const data = await res.json();
-      setDiff(data.output);
-      persist({ diff: data.output });
+      await readStream(res, setDiff, "diff");
     } catch {
       setDiff("Error generating diff.");
     }
