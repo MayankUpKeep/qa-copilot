@@ -143,7 +143,10 @@ function formatPrText(prDetails) {
       text += `PR: ${pr.url} — ${pr.error}\n\n`;
       continue;
     }
+    const repoMatch = (pr.url || "").match(/github\.com\/[^/]+\/([^/]+)/);
+    const repoName = repoMatch ? repoMatch[1] : "unknown";
     text += `PR: ${pr.title}\n`;
+    text += `Repository: ${repoName}\n`;
     text += `Author: ${pr.author} | State: ${pr.state}${pr.merged ? " (merged)" : ""}\n`;
     text += `Branch: ${pr.headBranch} → ${pr.baseBranch}\n`;
     text += `Changes: +${pr.additions} -${pr.deletions} across ${pr.changedFiles} files\n`;

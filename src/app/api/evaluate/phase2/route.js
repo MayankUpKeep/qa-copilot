@@ -21,6 +21,7 @@ GROUNDING:
 - No vague language like "verify it works" — specify exact input, action, expected outcome.
 - Testing is UI + browser network tab only. No DB or server console access.
 - If the PR changes something the ticket didn't mention, flag it.
+- STRICT GROUNDING FOR NON-SCENARIO SECTIONS (Dependencies, Risks, Assumptions, Out of Scope): Every bullet MUST be directly traceable to something stated or implied in the ticket or PR. Do NOT generate generic risks or assumptions that could apply to any ticket. If nothing applies, write "None identified based on ticket/PR content." Fewer accurate bullets are always better than many speculative ones.
 
 COVERAGE:
 - Map every ticket requirement to PR evidence (files changed, endpoints modified).
@@ -44,7 +45,9 @@ REGRESSION ANALYSIS:
   * Labels with "web-app" → changes are in web-app codebase.
   * Labels with "core-service" → changes are in core-service codebase.
   * If no labels, infer from PR files changed and ticket content.
-- Scan the AFFECTED codebases first (based on labels), then check the OTHER codebases for cross-service regression.
+- MULTI-LABEL = MULTI-CODEBASE: When the ticket has MULTIPLE labels (e.g., "web-app", "core-service", "vendor-management"), this means changes span multiple codebases — possibly in separate branches/PRs. You MUST analyze ALL labeled codebases for regression, not just one. Cross-service regression is especially critical here (e.g., a core-service API change may break web-app pages that call it).
+- PR FILE EVIDENCE: When PR/code changes are included, use the "Repository:" and "Files Changed:" sections per PR to confirm which specific modules, routes, and services are touched in each branch. This supplements the labels and reveals the exact scope of changes per codebase.
+- Scan the AFFECTED codebases first (based on labels + PR evidence), then check the OTHER codebases for cross-service regression.
 - For each connected route/endpoint/module, assess the regression risk (shared state, shared API contracts, shared DB tables, shared UI components).
 - ONLY list routes/endpoints that actually appear in the application map. Do NOT invent paths.
 - If the app map is not available, skip the regression section.
@@ -55,7 +58,7 @@ ROLE-BASED TESTING:
 - STEP 1 — Classify using TICKET LABELS (primary signal) + PR files + ticket content:
   A) VENDOR PORTAL ONLY: Labels include "vendor-management", "vendor-portal", "provider-network" — OR PR only modifies vendor-management/ files — AND NO labels for web-app/core-service AND ticket does NOT describe core/web features.
   B) WEB-APP / CORE-SERVICE ONLY: Labels include "web-app", "core-service", or any non-vendor label — OR PR only modifies web-app/core-service files — AND NO vendor labels present.
-  C) CROSS-SYSTEM: Labels include BOTH vendor AND core/web labels — OR PR modifies files in BOTH vendor-management AND web-app/core-service.
+  C) CROSS-SYSTEM: Labels include BOTH vendor AND core/web labels — OR PR modifies files in BOTH vendor-management AND web-app/core-service. (Common when a ticket has multiple labels like "web-app, core-service" indicating changes across branches.)
 - STEP 2 — Select roles:
   A) VENDOR PORTAL ONLY → Use ONLY: Vendor, Contractor, Provider Admin, Provider Tech. Do NOT include Admin, Limited Admin, or any standard role.
   B) WEB-APP / CORE-SERVICE ONLY → ALWAYS: Admin, Limited Admin. Add Technician, Limited Technician, View Only, Requester, or Operator ONLY if ticket/PR mentions those roles or modifies auth code. Do NOT include Vendor, Contractor, Provider Admin, or Provider Tech.
@@ -76,7 +79,9 @@ ROLE ASSIGNMENT IN SCENARIOS:
 - Only create separate rows when expected technical behavior DIFFERS between roles (different status codes, different response payloads, different access levels).
 
 AUTOMATION CLASSIFICATION (two-pass):
-- First generate all scenarios with Type as "TBD", then classify each as "Automatable" (standard UI interactions, API calls, element checks testable with Playwright) or "Manual" (visual judgment, complex subjective validation, drag-and-drop, cross-device).
+- First generate all scenarios with Type as "TBD", then classify each as:
+  * "Automatable" — standard UI interactions, element checks testable with Playwright. Automation runs ONLY against the web-app UI, so a scenario is automatable only if the change produces an observable difference in the UI that Playwright can assert on.
+  * "Manual" — visual judgment, complex subjective validation, drag-and-drop, cross-device, OR backend-only changes (core-service / vendor-management API, database, business logic) that do not alter what the UI renders or returns to the browser. If the backend change does not produce a visible UI difference, it cannot be verified through UI automation.
 - COUNTING RULE (critical): After all scenario tables are complete, you MUST go back and count every single row across ALL tables — Positive Test Scenarios, Negative Test Scenarios, Race Condition Scenarios (if present), AND Regression Test Scenarios (if present). The "Total scenarios" number MUST equal the exact sum of rows across all these tables. Automatable + Manual MUST equal Total. Double-check by re-counting each table. If the math does not add up, re-count before outputting.
 
 QUALITY:
@@ -93,14 +98,15 @@ ${labelsBlock}
 Produce the test plan in this structure:
 
 TP Feature Dependencies & Risks:
-- Are DevOps, other teams, or other changes required as part of this feature change? How may that introduce risk to delivery, quality, timelines, or scope?
+(ONLY list items directly evidenced by the ticket or PR. Do NOT speculate or generate generic risks. If nothing applies, write "None identified based on ticket/PR content.")
+- Are DevOps, other teams, or other changes required as part of this feature change?
 - Are other teams or features impacted by this PR? How?
 - Where can this feature/change be triggered, accessed, connected to, or interacted with?
 - What are the parity & compatibility expectations between this change and existing behavior?
-- What are the points of data interaction (in/out) affected by this PR?
-- Connected/integrated systems, including 3rd party tools, micro services, connected feature sets or services impacted?
+- What don't we know or understand about this change?
 
 TP Test Execution Dependencies & Risks:
+(ONLY list items directly evidenced by the ticket or PR. If nothing applies, write "None identified based on ticket/PR content.")
 - What teams, stakeholders, expertise, tools, and systems are required to fully test this change?
 - What do we not understand about the change itself (areas for exploratory testing)?
 - What areas do we have concerns about being able to properly test given available mechanisms, tools, and knowledge?
@@ -126,10 +132,13 @@ TP Technical Requirements for Testing:
 - Environment(s) to deploy changes to for testing
 
 TP Assumptions:
-- What is assumed but not stated in the ticket or PR?
+(ONLY list assumptions directly implied by the ticket or PR but not explicitly stated. Do NOT generate generic assumptions. If nothing is assumed, write "None identified.")
+- What is assumed to be true but not explicitly stated in the ticket or PR?
 
 TP Out of Scope:
 - What does the ticket explicitly exclude?
+- If the application map is available: list nearby routes, endpoints, or modules that are related to the changed area but are NOT touched by this ticket's or PR's changes (based on labels, PR files, and ticket content). These are areas testers should NOT spend time on. Reference specific routes/endpoints from the app map.
+- If no app map is available, only list items the ticket explicitly excludes. If nothing, write "Not specified in ticket."
 
 TP Testing Scope:
 - What features from the ticket and changes from the PR will be tested?

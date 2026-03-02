@@ -42,19 +42,22 @@ ROLE SELECTION (use TICKET LABELS as primary signal):
 - Vendor portal roles (vendor-management): Vendor (6), Contractor (101), Provider Admin, Provider Tech.
 - VENDOR PORTAL ONLY (labels: vendor-management/vendor-portal/provider-network) → Vendor, Contractor, Provider Admin, Provider Tech ONLY.
 - WEB-APP / CORE-SERVICE ONLY → Admin, Limited Admin always; add others only if ticket mentions them.
-- CROSS-SYSTEM (both vendor + core/web labels) → both standard + vendor roles.
+- CROSS-SYSTEM (both vendor + core/web labels) → both standard + vendor roles. (Multiple labels like "web-app, core-service" = changes across branches, so treat as cross-system.)
 
 REGRESSION — BE THOROUGH:
 - This is the most important section. When two plans are merged, regression coverage must EXPAND, not shrink.
+- MULTI-LABEL = MULTI-CODEBASE: When the ticket has multiple labels (e.g., "web-app", "core-service"), each label represents a separate codebase with changes (often in different branches). ALL labeled codebases must be analyzed for regression. Cross-service regression is especially critical when changes span multiple codebases.
 - Use the application map to find EVERY route, endpoint, and module that shares data, state, APIs, or components with the changed feature.
 - Go ELEMENT-LEVEL: list specific UI elements (fields, filters, dropdowns, list columns, cards, modals, form inputs) and API parameters — not just routes.
-- Include regression for ALL affected codebases (web-app, core-service, vendor-management).
+- Include regression for ALL affected codebases (web-app, core-service, vendor-management) based on labels and PR evidence.
 - For each regression item, create a concrete test scenario with expected proof.
 - When in doubt, INCLUDE the regression case. More coverage is better than missed regression.
 - If no app map is available, still derive regression areas from what both plans mention.
 
 AUTOMATION CLASSIFICATION:
-- Classify each scenario as "Automatable" (Playwright/JS: standard UI interactions, API calls, element checks) or "Manual" (visual judgment, complex multi-step, drag-and-drop).
+- Classify each scenario as:
+  * "Automatable" — Playwright/JS: standard UI interactions, element checks. Automation runs ONLY against the web-app UI, so a scenario is automatable only if the change produces an observable UI difference.
+  * "Manual" — visual judgment, complex multi-step, drag-and-drop, OR backend-only changes (core-service / vendor-management API, database, business logic) that do not alter what the UI renders. If the backend output to the UI is unchanged, the scenario must be manual.
 - COUNTING RULE (critical): After all scenario tables are complete, you MUST go back and count every single row across ALL tables — Positive Test Scenarios, Negative Test Scenarios, AND Regression Test Scenarios (if present). The "Total scenarios" number MUST equal the exact sum of rows across all these tables. Automatable + Manual MUST equal Total. Double-check by re-counting each table. If the math does not add up, re-count before outputting.
 
 QUALITY:

@@ -16,6 +16,7 @@ GROUNDING:
 - HOWEVER: If the application map reveals connected screens or user flows that share navigation, data, or forms with the ticket's feature, you MUST include regression scenarios for those areas even if the ticket does not mention them. Do not miss scope.
 - Use plain language. No developer terminology.
 - If the ticket is vague, keep the plan minimal and flag: "Ticket lacks detail — request clarification."
+- STRICT GROUNDING FOR NON-SCENARIO SECTIONS (Dependencies, Risks, Assumptions, Out of Scope): Every bullet MUST be directly traceable to something stated or implied in the ticket. Do NOT generate generic risks or assumptions that could apply to any ticket. If nothing applies, write "None identified based on ticket content." Fewer accurate bullets are always better than many speculative ones.
 
 COVERAGE:
 - Focus on user journeys, UX flows, and edge cases users would actually hit.
@@ -39,6 +40,7 @@ REGRESSION ANALYSIS:
   * Labels with "web-app" → changes are in web-app codebase.
   * Labels with "core-service" → changes are in core-service codebase.
   * If no labels, infer from ticket content.
+- MULTI-LABEL = MULTI-CODEBASE: When the ticket has MULTIPLE labels (e.g., "web-app", "core-service", "vendor-management"), this means changes span multiple codebases — possibly in separate branches/PRs. You MUST analyze ALL labeled codebases for regression, not just one. Cross-service regression is especially critical here.
 - Scan the AFFECTED codebases first (based on labels), then check the OTHER codebases for cross-service regression from the user's perspective.
 - For each connected route/screen, assess the regression risk from the user's perspective.
 - ONLY list routes that actually appear in the application map. Do NOT invent paths.
@@ -50,7 +52,7 @@ ROLE-BASED TESTING:
 - STEP 1 — Classify using TICKET LABELS (primary signal) + ticket content:
   A) VENDOR PORTAL ONLY: Labels include "vendor-management", "vendor-portal", "provider-network" — OR ticket text mentions "vendor portal", "provider", "contractor" — AND NO labels for web-app/core-service AND ticket does NOT describe core/web features.
   B) WEB-APP / CORE-SERVICE ONLY: Labels include "web-app", "core-service", or any non-vendor label — OR ticket is about work orders, assets, locations, PMs, parts, meters, purchase orders, people, settings, analytics — AND NO vendor labels present.
-  C) CROSS-SYSTEM: Labels include BOTH vendor AND core/web labels — OR ticket describes changes spanning both systems.
+  C) CROSS-SYSTEM: Labels include BOTH vendor AND core/web labels — OR ticket describes changes spanning both systems. (Common when a ticket has multiple labels like "web-app, core-service" indicating changes across branches.)
 - STEP 2 — Select roles:
   A) VENDOR PORTAL ONLY → Use ONLY: Vendor, Contractor, Provider Admin, Provider Tech. Do NOT include Admin, Limited Admin, or any standard role.
   B) WEB-APP / CORE-SERVICE ONLY → ALWAYS: Admin, Limited Admin. Add Technician, Limited Technician, View Only, Requester, or Operator ONLY if ticket mentions those roles or permission behavior. Do NOT include Vendor, Contractor, Provider Admin, or Provider Tech.
@@ -73,7 +75,9 @@ ROLE ASSIGNMENT IN SCENARIOS:
 - Only create separate rows when expected behavior DIFFERS between roles.
 
 AUTOMATION CLASSIFICATION (two-pass):
-- First generate all scenarios with Type as "TBD", then classify each as "Automatable" (standard UI interactions testable with Playwright) or "Manual" (visual judgment, complex subjective validation, drag-and-drop, cross-device).
+- First generate all scenarios with Type as "TBD", then classify each as:
+  * "Automatable" — standard UI interactions testable with Playwright. Automation runs ONLY against the web-app UI, so a scenario is automatable only if the change produces an observable difference in the UI.
+  * "Manual" — visual judgment, complex subjective validation, drag-and-drop, cross-device, OR backend-only changes (core-service / vendor-management API, database, business logic) that do not alter what the UI renders. If the backend output to the UI is unchanged, the scenario cannot be verified through UI automation.
 - COUNTING RULE (critical): After all scenario tables are complete, you MUST go back and count every single row across ALL tables — Positive Test Scenarios, Negative Test Scenarios, Race Condition Scenarios (if present), AND Regression Test Scenarios (if present). The "Total scenarios" number MUST equal the exact sum of rows across all these tables. Automatable + Manual MUST equal Total. Double-check by re-counting each table. If the math does not add up, re-count before outputting.
 
 QUALITY:
@@ -89,13 +93,14 @@ ${labelsBlock}
 Produce the test plan in this structure:
 
 TP Feature Dependencies & Risks:
+(ONLY list items directly evidenced by the ticket. Do NOT speculate or generate generic risks. If nothing applies, write "None identified based on ticket content.")
 - Are other teams or features impacted by this change? How?
 - Where can this feature/change be triggered, accessed, connected to, or interacted with?
-- What are the parity & compatibility expectations between this change and what existed before? How were customers using it and how will this require them to change their behavior?
-- What sample scenarios might admins use this for? And how would technicians use it? Where might this create confusion, redundancy, or unexpected behavior?
+- What are the parity & compatibility expectations between this change and what existed before?
 - What don't we know or understand about this change, its workflows, triggers, use, interactions, and/or impacts?
 
 TP Test Execution Dependencies & Risks:
+(ONLY list items directly evidenced by the ticket. If nothing applies, write "None identified based on ticket content.")
 - What teams, stakeholders, expertise, tools, and systems are required to fully test this change?
 - What do we not understand about the change itself (great use of exploratory testing)?
 - What areas do we have concerns about being able to properly test given the tools and knowledge available?
@@ -116,10 +121,13 @@ TP Technical Requirements for Testing:
 - Test data sources
 
 TP Assumptions:
-- What is assumed but not stated in the ticket?
+(ONLY list assumptions directly implied by the ticket but not explicitly stated. Do NOT generate generic assumptions. If nothing is assumed, write "None identified.")
+- What is assumed to be true but not explicitly stated in the ticket?
 
 TP Out of Scope:
 - What does the ticket explicitly say will NOT be covered?
+- If the application map is available: list nearby screens, routes, or features that are related to the changed area but are NOT touched by this ticket's changes (based on labels and ticket content). These are areas testers should NOT spend time on. Reference specific routes from the app map.
+- If no app map is available, only list items the ticket explicitly excludes. If nothing, write "Not specified in ticket."
 
 TP Testing Scope:
 - What user-facing features from the ticket will be tested?
